@@ -6,7 +6,7 @@ This project will explore the behavioral factors that are linked to chronic dise
 Methods:
 1.	Feature selection: there are hundreds of columns so narrowing it down will be important
 2.	Feature interpretability – LIME (Local Interpretable Model-agnostic Explanations) is an R package that helps the analyst uncover the features of importance and their magnitude in the decision-making process on predictions
-3.	SVM – this is a powerful algorithm that I would love to learn more about and is apt to crunch thousands of variables. If this algorithm is not fit for the task I will likely default to a decision tree based approach (random forest for classification, boosted tree for regression)
+3.	SVM – this is a powerful algorithm is apt to crunch thousands of variables in a reasonable amount of time. If this algorithm is not fit for the task I will likely default to a decision tree based approach (random forest or boosted tree)
 4.	Parallel computing – R’s `doParallel` and `parallel` packages will be helpful to use to speed up computation time. 
 5.	Distributed computing – using Spark to speed up computation time and prevent big data difficulties 
 These data sets are in csv format on Kaggle and span from 2001 to 2015. Due to this time component, descriptive time series methods will be used. Collectively the data will hold about 6 GB of info, so I hope to use Spark during the heavier computations related to data manipulation and modeling. Though it is powerful, I only have one computer and will likely need multiple to make a small cluster and speed up computation time.
@@ -15,7 +15,8 @@ Potential Obstacles:
 Since this data is collected from phone surveys I expect there to be plenty of missing data. Also, the fact that this is a social science / health study there will likely be high variability. Another setback may come from using Spark. Since `sparklyr` is not supported as readily as other packages it will be more challenging to work around. Many of the useful R functions normally used in an R analysis may not be available while using Spark. 
 
 Project Benefit:
-Such an analysis will: 
+
+Such an analysis will...
 1.	Allow better understanding of public health risks
 2.	Understand representative samples of the American population’s health across time 
 3.	Will produce a tool to calculate personal risk
