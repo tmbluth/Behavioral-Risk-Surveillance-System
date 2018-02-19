@@ -13,56 +13,76 @@ all_years$RACE <- as.integer(all_years$RACE)
 
 # Variables with values that 'make_num_NA' will mistake as NA: CHILDREN (77), EMPLOYMENT (7 = retired), SCNTWRK1 (98, 97)
 edge_case_vars <- all_years %>% 
-  transmute(EMPLOYMENT= ifelse(EMPLOYMENT == 9, NA, EMPLOYMENT),
-                               CHILDREN  = ifelse(CHILDREN == 99, NA, 
-                                           ifelse(CHILDREN == 88, 0, CHILDREN)),
-                               SCNTWRK1  = ifelse(SCNTWRK1 == 99 | SCNTWRK1 == 97, NA,
-                                           ifelse(SCNTWRK1 == 98, 0, SCNTWRK1)))
+  transmute(EMPLOYMENT= ifelse(EMPLOYMENT == 9, NA, EMPLOYMENT), 
+            CHILDREN  = ifelse(CHILDREN == 99, NA, 
+                        ifelse(CHILDREN == 88, 0, CHILDREN)),
+            SCNTWRK1  = ifelse(SCNTWRK1 == 99 | SCNTWRK1 == 97, NA,
+                        ifelse(SCNTWRK1 == 98, 0, SCNTWRK1)),
+            DRNKMON   = ifelse(DRNKMON == 99.99, NA, DRNKMON),
+            STRFREQ_  = ifelse(STRFREQ_ == 99, NA, STRFREQ_)
+            ) 
 
 # Change numeric placeholders into correct meaning (make_num_NA)
 clean_years <- all_years %>% 
-  select(-CHILDREN, -EMPLOYMENT, -SCNTWRK1) %>% 
+  select(-CHILDREN, -EMPLOYMENT, -SCNTWRK1, -DRNKMON, -STRFREQ_) %>% 
   map(make_num_NA) %>% 
-  bind_cols(edge_case_vars)
+  bind_cols(edge_case_vars) 
+
+# Remove highly NA columns and rows
+NA.col <- clean_years %>% 
+  # Get % missing in each column
+  map(function(x) sum(is.na(x))/nrow(.) ) %>% 
+  # If column in missing less than 50%, keep it
+  map_lgl(function(x) x < 0.5)
+clean_years2 <- clean_years[ , NA.col] 
+NA.row <- clean_years %>%
+  # Get % missing in each respondent
+  apply(MARGIN = 1, function(x) sum(is.na(x))/ncol(.) ) %>% 
+  # If respondent missed less than 50% for questions that had less than 50% missing columns, keep them 
+  map_lgl(function(x) x < 0.5) 
+clean_years2 <- clean_years2[NA.row, ] 
 
 # List of integer vars:
-integers <- c('PHYSHLTH', 'MENTHLTH', 'POORHLTH', 'CHILDREN', 'AGE_GRP',
-              'BMI',      'AVEDRNK2', 'DRNK3GE5', 'MAXDRNKS', "FTJUDA1_",
-              "FRUTDA1_", "BEANDAY_", "GRENDAY_", "ORNGDAY_", "VEGEDA1_",
-              'PAINACT2', 'QLMENTL2', 'QLSTRES2', 'QLHLTH2',  'SCNTWRK1',
-              'ADPLEASR', 'ADDOWN',   'ADSLEEP',  'ADENERGY', 'ADEAT1', 
-              'ADFAIL',   'ADTHINK',  'ADMOVE',   'STRFREQ_', 'SLEEP_TIME')
+integers <- c('PHYSHLTH', 'MENTHLTH', 'CHILDREN', 'AGE_GRP',
+              'BMI',      'FTJUDA1_',
+              'FRUTDA1_', 'BEANDAY_', 'GRENDAY_', 'ORNGDAY_', 'VEGEDA1_',
+              'STRFREQ_',  'DRNKMON')  #'SLEEP_TIME','PAINACT2', 'QLMENTL2', 'QLSTRES2', 'QLHLTH2',  'SCNTWRK1',  'ADPLEASR', 'ADDOWN',   'ADSLEEP',  'ADENERGY', 'ADEAT1', 'ADFAIL',   'ADTHINK',  'ADMOVE',
 # List of factor vars:
-factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'BPHIGH4',    'BPMEDS',
+factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'BPHIGH4',   
              'BLOODCHO', 'TOLDHI2',  'CVDINFR4', 'CVDCRHD4',   'CVDSTRK3',
-             'ASTHMA3',  'ASTHNOW',  'CHCSCNCR', 'CHCOCNCR',   'CHCCOPD',
+             'ASTHMA3',    'CHCSCNCR', 'CHCOCNCR',   'CHCCOPD',
              'HAVARTH3', 'ADDEPEV2', 'CHCKIDNY', 'DIABETE3',   'SEX',
-             'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 'PREGNANT',
+             'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 
              'LIMITED',  'USEEQUIP', 'BLIND',    'DECIDE',     'DIFFWALK',
-             'DIFFDRES', 'DIFFALON', 'SMOKE100', 'SMOKDAY2',   'STOPSMK2',
-             'USENOW3',  'PDIABTST', 'PREDIAB1', 'WTCHSALT',   'RACE',
-             'DRADVISE', 'SCNTPAID', 'MISTMNT',  'ADANXEV',    'RRATWRK2', 
-             'RRHCARE3', 'RRPHYSM2', 'RREMTSM2', 'year')
+             'DIFFDRES', 'DIFFALON',     'RACE',
+              '_RFBING5', '_SMOKER3', 'year') #'ASTHNOW','PREGNANT','PDIABTST', 'PREDIAB1''DRADVISE', 'SCNTPAID', 'MISTMNT',  'ADANXEV',    'RRATWRK2', 'RRHCARE3', 'RRPHYSM2', 'RREMTSM2', 'WTCHSALT'
 # List of ordered factor vars:
-ordered_f <- c('GENHLTH',  'CHECKUP1', 'CHOLCHK',  'EDUCA',    'INCOME2',
-               'LASTSMK2', 'SCNTMONY', 'SCNTMEAL', 'EMTSUPRT', 'LSATISFY', 'PA_BENCHMARK')
+ordered_f <- c('GENHLTH',  'CHECKUP1', 'CHOLCHK',  'EDUCA', 'INCOME2', 'PA_BENCHMARK') # 'SCNTMONY', 'SCNTMEAL','EMTSUPRT', 'LSATISFY',
 
 # Check to see if variable groupings are equal to number of columns
-setdiff(c(integers, factors, ordered_f), names(clean_years)); setdiff(names(clean_years), c(integers, factors, ordered_f))
+setdiff(c(integers, factors, ordered_f), names(clean_years2)); setdiff(names(clean_years2), c(integers, factors, ordered_f))
 
-clean_years2 <- clean_years %>% 
+clean_years_final <- clean_years2 %>% 
   # Change continuous numeric values into discrete integers
-  mutate_if(names(clean_years) %in% integers, as.integer) %>% 
+  mutate_if(names(clean_years2) %in% integers, as.integer) %>% 
   # Change questions with classes into factors
-  mutate_if(names(clean_years) %in% factors, as.factor) %>% 
+  mutate_if(names(clean_years2) %in% factors, as.factor) %>% 
   # Change ordinal questions into ordered factors
-  mutate_if(names(clean_years) %in% ordered_f, as.ordered) %>% 
+  mutate_if(names(clean_years2) %in% ordered_f, as.ordered) %>% 
   # Flip direction of some of the ordered factors
-  mutate_if(names(clean_years) %in% c('GENHLTH', 'LASTSMK2', 'SCNTMONY', 'SCNTMEAL', 'EMTSUPRT', 'LSATISFY', 'PA_BENCHMARK'), fct_rev)
+  mutate_if(names(clean_years2) %in% c('GENHLTH', 'PA_BENCHMARK'), fct_rev)
 
 # Check to see if data set is as expected
-lapply(clean_years2, unique)
-lapply(clean_years2, function(x) paste0(round(sum(is.na(x))/nrow(clean_years2)*100, 2), '% missing'))
-sum(apply(clean_years2, 1, function(x) sum(is.na(x))/ncol(clean_years2)) < 0.33) # 11215 people answered 67% or more of questions
+lapply(clean_years_final, unique)
+clean_years_final %>% map(function(x) paste0(round(sum(is.na(x))/nrow(.)*100, 2), '% missing'))
 
-save(clean_years2, file = 'intermediate_saves/clean_years2.RData')
+save(clean_years_final, file = 'intermediate_saves/clean_years_final.RData')
+
+# Make NA's into a factor level
+clean_years_NA <- map_if(.x = clean_years_final, .p = is.factor, .f = addNA, ifany = TRUE) %>% as.data.frame()
+save(clean_years_NA, file = 'intermediate_saves/clean_years_NA.RData')
+
+#--------------------------------#
+
+
+
