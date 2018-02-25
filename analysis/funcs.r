@@ -48,7 +48,7 @@ make_num_NA <- function(x) {
 #=====================================================================================================#
 
 diet_questions <- function(x){ 
-  require(tidyverse)
+  require(stringr)
   x <- ifelse(is.na(x), 999, x) 
   x <- ifelse(x < 200, as.numeric(str_trunc(x, width = 2, side = 'left', ellipsis = '')),
          ifelse(x < 301, round(as.numeric(str_trunc(x, width = 2, side = 'left', ellipsis = '')) / (30/7), 2), 
@@ -59,3 +59,7 @@ diet_questions <- function(x){
 }
 
 #=====================================================================================================#
+
+NA_prop <- function(df) {
+  print(df %>% map_chr(function(x) paste0(round(sum(is.na(x))/nrow(.)*100, 2), '% missing')))
+}
