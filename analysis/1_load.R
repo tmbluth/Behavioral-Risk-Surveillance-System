@@ -1,7 +1,8 @@
 library(data.table)
 library(dplyr)
 library(forcats)
-source('/home/tmbluth/Documents/GitHub/Behavioral-Risk-Surveillance-System/analysis/funcs.r')
+# /home/tmbluth/Documents/GitHub/Behavioral-Risk-Surveillance-System/
+source('analysis/funcs.r')
 
 # List format
 train_11 <- fread('data/2011.csv', 

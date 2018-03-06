@@ -1,7 +1,8 @@
 library(dplyr)
 library(purrr)
+library(stringr)
 library(caret)
-source('/home/tmbluth/Documents/GitHub/Behavioral-Risk-Surveillance-System/analysis/funcs.r')
+source('analysis/funcs.r')
 load('intermediate_saves/all_years.RData')
 
 # View all unique responses:
@@ -18,12 +19,12 @@ edge_case_vars <- all_years %>%
             SCNTWRK1  = ifelse(SCNTWRK1 == 99 | SCNTWRK1 == 97, NA,
                         ifelse(SCNTWRK1 == 98, 0, SCNTWRK1)),
             DRNKMON   = ifelse(DRNKMON == 99.99, NA, DRNKMON),
-            STRFREQ_  = ifelse(STRFREQ_ == 99, NA, STRFREQ_)
-            ) 
+            STRFREQ_  = ifelse(STRFREQ_ == 99, NA, STRFREQ_),
+            `_STATE`  = `_STATE`)
 
 # Change numeric placeholders into correct meaning (make_num_NA)
 clean_years <- all_years %>% 
-  select(-CHILDREN, -EMPLOYMENT, -SCNTWRK1, -DRNKMON, -STRFREQ_) %>% 
+  select(-CHILDREN, -EMPLOYMENT, -SCNTWRK1, -DRNKMON, -STRFREQ_, -`_STATE`) %>% 
   map(make_num_NA) %>% 
   bind_cols(edge_case_vars);  rm(edge_case_vars, all_years)
 
@@ -36,25 +37,24 @@ NA.col <- clean_years %>%
 
 clean_years2 <- clean_years[ , NA.col]; rm(clean_years)
 
-# List of integer vars:
-integers <- c('PHYSHLTH', 'MENTHLTH', 'CHILDREN', 'AGE_GRP', 'BMI',  'DRNKMON')
+# List of integer / ordered vars:
+integers <- c('GENHLTH', 'PHYSHLTH', 'MENTHLTH', 'CHILDREN', 'AGE_GRP', 'EDUCA', 'INCOME2', 'BMI', 'DRNKMON', 'CHECKUP1')
 # Integers removed due to high NA proportion:
 #   'FTJUDA1_', 'FRUTDA1_', 'BEANDAY_', 'GRENDAY_', 'ORNGDAY_', 'VEGEDA1_',
 #   'STRFREQ_', 'SLEEP_TIME','PAINACT2', 'QLMENTL2', 'QLSTRES2', 'QLHLTH2', 'SCNTWRK1', 
 #   'ADPLEASR', 'ADDOWN',   'ADSLEEP',  'ADENERGY', 'ADEAT1', 'ADFAIL', 'ADTHINK',  'ADMOVE',
 
 # List of factor vars:
-factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',    'CVDINFR4', 'CVDCRHD4',   'CVDSTRK3',
-             'ASTHMA3',    'CHCSCNCR', 'CHCOCNCR',   'CHCCOPD',
+factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'CVDINFR4',   'CVDCRHD4',  
+             'CVDSTRK3', 'ASTHMA3',  'CHCSCNCR', 'CHCOCNCR',   'CHCCOPD',
              'HAVARTH3', 'ADDEPEV2', 'CHCKIDNY', 'DIABETE3',   'SEX',
-             'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 
-             'LIMITED',  'USEEQUIP',      'RACE',
-              '_RFBING5', '_SMOKER3', 'year', 'GENHLTH',  'CHECKUP1', 'EDUCA', 'INCOME2')
+             'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 'LIMITED',
+             'USEEQUIP', 'RACE',     '_RFBING5', '_SMOKER3',   'year')
 # Factors removed due to high NA proportion
 #   'BPHIGH4', 'BLOODCHO', 'TOLDHI2', 'BLIND', 'DECIDE', 'DIFFWALK', 'DIFFDRES', 'DIFFALON',
 #   'PREGNANT','PDIABTST', 'PREDIAB1''DRADVISE', 'SCNTPAID', 'MISTMNT',  'ADANXEV', 
-#   'RRATWRK2', 'RRHCARE3', 'RRPHYSM2', 'RREMTSM2', 'WTCHSALT''CHOLCHK'
-#   'PA_BENCHMARK', 'SCNTMONY', 'SCNTMEAL','EMTSUPRT', 'LSATIS, FY', 
+#   'RRATWRK2', 'RRHCARE3', 'RRPHYSM2', 'RREMTSM2', 'WTCHSALT', 'CHOLCHK'
+#   'PA_BENCHMARK', 'SCNTMONY', 'SCNTMEAL','EMTSUPRT', 'LSATISFY' 
 
 # Check to see if variable groupings are equal to number of columns
 setdiff(c(integers, factors), names(clean_years2)); setdiff(names(clean_years2), c(integers, factors))
@@ -69,27 +69,38 @@ clean_years3 <- clean_years2 %>%
 clean_years4 <- clean_years3[!is.na(clean_years3$CVDINFR4),] %>% .[!is.na(.$CVDCRHD4),] %>% .[!is.na(.$CVDSTRK3),] %>% .[!is.na(.$ADDEPEV2),]; rm(clean_years3)
 
 # Make NA's into a factor level. This can be used in exploration
-clean_years_NA <- map_if(.x = clean_years4, .p = is.factor, .f = addNA, ifany = TRUE) %>% as.data.frame()
-NA_prop(clean_years_NA); NA_prop(clean_years4); rm(clean_years4)
-save(clean_years_NA, file = 'intermediate_saves/clean_years_NA.RData')
+clean_years_NA <- map_if(.x = clean_years4, .p = is.factor, .f = addNA, ifany = TRUE) %>% 
+  as.data.frame() %>% 
+  mutate(X_STATE = as.character(X_STATE),
+         DRNKMON = NULL) # Found that DRNKMON is missing for test set 
 
-# To prepare for modeling variables must be numeric. For distance-based algorithms make variables on same scale (0 to 1)
-integers_df <- select_if(clean_years_NA, is.integer)
-zero_to_one <- map_df(integers_df, function(x) (x - min(x, na.rm = TRUE))/diff(range(x, na.rm = TRUE)))
+imp <- preProcess(clean_years_NA, method = 'medianImpute') 
+clean_years_final <- predict(imp, newdata = clean_years_NA)
 
-# Dummy code factors (including NA) to make them numeric. No need to include state as an input variable
-factors_df <- select_if(select(clean_years_NA, - X_STATE), is.factor); rm(clean_years_NA)
-dummy <- dummyVars(~ ., data = factors_df) %>% predict(factors_df)
+# Check to see if data is ready for modeling
+NA_prop(clean_years_final)
+save(clean_years_final, file = 'intermediate_saves/clean_years_final.RData')
+
+# Preserve the target vars  and the integers so they are not dummy coded
+targets <- select(clean_years_final, CVDINFR4, CVDCRHD4, CVDSTRK3, ADDEPEV2, year)
+nums <- select_if(clean_years_final, is.numeric)
+# Dummy code input factors
+dummy <- dummyVars(~ HLTHPLN1 + PERSDOC2 + MEDCOST + ASTHMA3 + CHCSCNCR + 
+              CHCCOPD + HAVARTH3 + CHCKIDNY + DIABETE3 + VETERAN3 + 
+              MARITAL + RENTHOM1 + SEX + LIMITED + USEEQUIP +
+              X_RFBING5 + X_SMOKER3 + RACE + EMPLOYMENT,
+              data = clean_years_final, fullRank = TRUE, sep = '_') %>% 
+  predict(newdata = clean_years_final)
+
+"
+dummy <- clean_years_final[ , !colnames(clean_years_final) %in% colnames(targets)] %>%
+  dummy_cols(remove_first_dummy = TRUE)
+"
 
 # Recombine normalized integer variables to dummy coded variables
-clean_years_final <- cbind(zero_to_one, dummy); rm(zero_to_one, dummy, factors_df, integers_df)
-
-# Some yes/no questions are dummy coded due to the added factor level 'NA'. Since one colum is the inverse of the other column, one is removed
-clean_years_final <- clean_years_final %>% 
-  select(-HLTHPLN1.2, -MEDCOST.2, -CVDINFR4.2, -CVDCRHD4.2, -CVDSTRK3.2, 
-         -ASTHMA3.2, -CHCSCNCR.2, -CHCOCNCR.2, -CHCCOPD.2, -HAVARTH3.2,
-         -ADDEPEV2.2, -CHCKIDNY.2, -VETERAN3.2, -SEX.2, -LIMITED.2, 
-                            -USEEQUIP.2, -X_RFBING5.2)
+SVM_data <- cbind(targets, dummy, nums) %>% 
+  mutate_if(is.numeric, as.integer)
 
 # Finally!
-save(clean_years_final, file = 'intermediate_saves/clean_years_final.RData')
+NA_prop(SVM_data)
+save(SVM_data, file = 'intermediate_saves/SVM_data.RData')
