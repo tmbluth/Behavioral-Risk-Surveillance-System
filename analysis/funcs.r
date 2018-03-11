@@ -1,44 +1,5 @@
 # Custom functions used throughout analysis
 
-# UNUSED   
-# make_NA <- function(x) {  
-#   if(is.factor(x)) {
-#     levels(x) <- ifelse(levels(x) == 'Don't Know/Refused' | # If the levels of this factor are any of these things..
-#                       levels(x) == 'Dont Know/Refused' | 
-#                       levels(x) == 'Don't Know' | 
-#                       levels(x) == 'Dont Know' |
-#                       levels(x) == 'Refused' | 
-#                       levels(x) == 'Not Applicable' |
-#                       levels(x) == 'Don't Know/Not Applicable' |
-#                       levels(x) == 'Dont Know/Not Applicable' |
-#                       levels(x) == 'Did Not Have Appt' |
-#                       levels(x) == 'No Experience' |
-#                       levels(x) == 'Did Not Have Appt/Not Applicable' |
-#                       levels(x) == 'Did Not Have a Primary Care Visit' |
-#                       levels(x) == 'Did Not See a Specialist', NA, levels(x)) # ..make them NA. Otherwise leave them
-#   return(x)
-#     } else if(is.character(x)) {
-#     x <- ifelse(x == 'Don't Know/Refused' |           # If any of the character strings are any of these things..
-#                 x == 'Dont Know/Refused' |
-#                 x == 'Don't Know' | 
-#                 x == 'Dont Know' |
-#                 x == 'Refused' | 
-#                 x == 'Not Applicable' |
-#                 x == 'Don't Know/Not Applicable' |
-#                 x == 'Did Not Have Appt' |
-#                 x == 'No Experience' |
-#                 x == 'Did Not Have Appt/Not Applicable' |
-#                 x == 'Did Not Have a Primary Care Visit' |
-#                 x == 'Did Not See a Specialist', NA, x) # ..make them NA. Otherwise leave them
-#   return(x)
-#   } else { 
-#     x <- ifelse(x %in% c(7, 9, 77, 99, 777, 999, 7777, 9999), NA, 
-#                 ifelse(x %in% c(8, 88, 98, 888), 0, x))
-#     return(x)  
-#   } 
-# }
-
-
 make_num_NA <- function(x) {
   x <- ifelse(x %in% c(7, 9, 77, 99, 777, 999, 7777, 9999), NA, 
               ifelse(x %in% c(8, 88, 98, 888), 0, x))
@@ -62,7 +23,10 @@ diet_questions <- function(x){
 #=====================================================================================================#
 
 NA_prop <- function(df) {
-  print(df %>% map_chr(function(x) paste0(round(sum(is.na(x))/nrow(.)*100, 2), '% missing')))
+  a <- df %>% map_chr(function(x) paste0(round(sum(is.na(x))/nrow(.)*100, 2), '% missing'))
+  b <- df %>% map_int(function(x) sum(is.na(x)))
+  NA_df <- data.frame(a, b)
+  return(NA_df)
 }
 
 #=====================================================================================================#
@@ -82,4 +46,34 @@ rf_tune <- function(.target, .data, .mtry, .num.trees, .importance = 'none'){
                   splitrule = 'gini', 
                   probability = TRUE)
   return(model)
+}
+
+#=====================================================================================================#
+
+downsample_part <- function(df, target, part.pct) {
+require(caret)
+  part <- createDataPartition(df[, target], p = part.pct, list = FALSE)
+  Train <- df[part, ]
+  Train <- downSample(x = Train[, names(Train) != target], 
+                         y = Train[, target],
+                         yname = target)
+  Test <- df[-part, ]
+  Test <- downSample(x = Test[, names(Test) != target],
+                        y = Test[, target],
+                        yname = target)
+  return(list(Train_set = Train, Test_set = Test))
+}
+
+upsample_part <- function(df, target, part.pct) {
+  require(caret)
+  part <- createDataPartition(df[, target], p = part.pct, list = FALSE)
+  Train <- df[part, ]
+  Train <- upSample(x = Train[, names(Train) != target], 
+                      y = Train[, target],
+                      yname = target)
+  Test <- df[-part, ]
+  Test <- upSample(x = Test[, names(Test) != target],
+                     y = Test[, target],
+                     yname = target)
+  return(list(Train_set = Train, Test_set = Test))
 }

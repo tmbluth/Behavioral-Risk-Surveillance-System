@@ -16,73 +16,70 @@ edge_case_vars <- all_years %>%
   transmute(EMPLOYMENT= ifelse(EMPLOYMENT == 9, NA, EMPLOYMENT), 
             CHILDREN  = ifelse(CHILDREN == 99, NA, 
                         ifelse(CHILDREN == 88, 0, CHILDREN)),
-            SCNTWRK1  = ifelse(SCNTWRK1 == 99 | SCNTWRK1 == 97, NA,
-                        ifelse(SCNTWRK1 == 98, 0, SCNTWRK1)),
-            DRNKMON   = ifelse(DRNKMON == 99.99, NA, DRNKMON),
-            STRFREQ_  = ifelse(STRFREQ_ == 99, NA, STRFREQ_),
-            `_STATE`  = `_STATE`)
+            STRFREQ_  = ifelse(STRFREQ_ == 99, NA, STRFREQ_))
 
 # Change numeric placeholders into correct meaning (make_num_NA)
 clean_years <- all_years %>% 
-  select(-CHILDREN, -EMPLOYMENT, -SCNTWRK1, -DRNKMON, -STRFREQ_, -`_STATE`) %>% 
+  dplyr::select(-CHILDREN, -EMPLOYMENT, -STRFREQ_) %>% 
   map(make_num_NA) %>% 
   bind_cols(edge_case_vars);  rm(edge_case_vars, all_years)
 
-# Remove highly NA columns and rows
-NA.col <- clean_years %>% 
-  # Get % missing in each column
-  map(function(x) sum(is.na(x))/nrow(.) ) %>% 
-  # If column in missing less than 33%, keep it
-  map_lgl(function(x) x < 0.33)
-
-clean_years2 <- clean_years[ , NA.col]; rm(clean_years)
+NA_prop(clean_years)
 
 # List of integer / ordered vars:
-integers <- c('GENHLTH', 'PHYSHLTH', 'MENTHLTH', 'CHILDREN', 'AGE_GRP', 'EDUCA', 'INCOME2', 'BMI', 'DRNKMON', 'CHECKUP1')
-# Integers removed due to high NA proportion:
-#   'FTJUDA1_', 'FRUTDA1_', 'BEANDAY_', 'GRENDAY_', 'ORNGDAY_', 'VEGEDA1_',
-#   'STRFREQ_', 'SLEEP_TIME','PAINACT2', 'QLMENTL2', 'QLSTRES2', 'QLHLTH2', 'SCNTWRK1', 
-#   'ADPLEASR', 'ADDOWN',   'ADSLEEP',  'ADENERGY', 'ADEAT1', 'ADFAIL', 'ADTHINK',  'ADMOVE',
+numerics <- c('PHYSHLTH', 'MENTHLTH', 'CHILDREN', 'STRFREQ_', 'FTJUDA1_',
+              'FRUTDA1_', 'BEANDAY_', 'GRENDAY_', 'ORNGDAY_', 'VEGEDA1_')
 
 # List of factor vars:
-factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'CVDINFR4',   'CVDCRHD4',  
+factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'CVDINFR4',  'CVDCRHD4',   
              'CVDSTRK3', 'ASTHMA3',  'CHCSCNCR', 'CHCOCNCR',   'CHCCOPD',
              'HAVARTH3', 'ADDEPEV2', 'CHCKIDNY', 'DIABETE3',   'SEX',
              'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 'LIMITED',
-             'USEEQUIP', 'RACE',     '_RFBING5', '_SMOKER3',   'year')
-# Factors removed due to high NA proportion
-#   'BPHIGH4', 'BLOODCHO', 'TOLDHI2', 'BLIND', 'DECIDE', 'DIFFWALK', 'DIFFDRES', 'DIFFALON',
-#   'PREGNANT','PDIABTST', 'PREDIAB1''DRADVISE', 'SCNTPAID', 'MISTMNT',  'ADANXEV', 
-#   'RRATWRK2', 'RRHCARE3', 'RRPHYSM2', 'RREMTSM2', 'WTCHSALT', 'CHOLCHK'
-#   'PA_BENCHMARK', 'SCNTMONY', 'SCNTMEAL','EMTSUPRT', 'LSATISFY' 
+             'USEEQUIP', 'RACE',     '_RFHYPE5', '_RFCHOL',    '_RFBING5', 
+             '_SMOKER3', 'PREGNANT', 'PA_BENCHMARK', 'year')
+
+factors.ordered <- c('GENHLTH', 'CHECKUP1', '_AGE_G', 'EDUCA', 'INCOME2', '_BMI5CAT')
 
 # Check to see if variable groupings are equal to number of columns
-setdiff(c(integers, factors), names(clean_years2)); setdiff(names(clean_years2), c(integers, factors))
+setdiff(c(numerics, factors, factors.ordered), names(clean_years)); setdiff(names(clean_years), c(numerics, factors, factors.ordered))
 
-clean_years3 <- clean_years2 %>% 
+clean_years2 <- clean_years %>% 
   # Change continuous numeric values into discrete integers
-  mutate_if(names(.) %in% integers, as.integer) %>% 
+  mutate_if(names(.) %in% numerics, as.numeric) %>% 
   # Change questions with classes into factors
-  mutate_if(names(.) %in% factors, as.factor); rm(clean_years2)
+  mutate_if(names(.) %in% factors, as.factor) %>% 
+  # Change questions with ordered classes into ordered factors
+  mutate_if(names(.) %in% factors.ordered, as.ordered); rm(clean_years)
 
 # Take out the outcome variable missing values
-clean_years4 <- clean_years3[!is.na(clean_years3$CVDINFR4),] %>% .[!is.na(.$CVDCRHD4),] %>% .[!is.na(.$CVDSTRK3),] %>% .[!is.na(.$ADDEPEV2),]; rm(clean_years3)
+clean_years3 <- clean_years2[!is.na(clean_years2$DIABETE3),] %>% 
+                .[!is.na(.$CVDSTRK3),] %>%
+                .[!is.na(.$ADDEPEV2),]; rm(clean_years2)
 
 # Make NA's into a factor level. This can be used in exploration
-clean_years_NA <- map_if(.x = clean_years4, .p = is.factor, .f = addNA, ifany = TRUE) %>% 
-  as.data.frame() %>% 
-  mutate(X_STATE = as.character(X_STATE),
-         DRNKMON = NULL) # Found that DRNKMON is missing for test set 
+clean_years_NA <- as.data.frame(map_if(.x = clean_years3, .p = is.factor, .f = addNA, ifany = TRUE))
 
-imp <- preProcess(clean_years_NA, method = 'medianImpute') 
-clean_years_final <- predict(imp, newdata = clean_years_NA)
+NA_prop(clean_years_NA)
+map_if(clean_years_NA, is.numeric, table, useNA = 'ifany')
 
-# Check to see if data is ready for modeling
-NA_prop(clean_years_final)
+clean_years_final <- as.data.frame(map_if(clean_years_NA, is.numeric, function(x) ifelse(is.na(x), round(mean(x, na.rm = TRUE), 1), x))) %>% 
+mutate(PHYSHLTH = as.ordered(cut_width(PHYSHLTH, width = 5, center = 2.5)),
+       MENTHLTH = as.ordered(cut_width(MENTHLTH, width = 5, center = 2.5)),
+       FTJUDA1_ = as.ordered(cut(FTJUDA1_, breaks = c(-Inf,1,2,3,4,5,Inf))),
+       FRUTDA1_ = as.ordered(cut(FRUTDA1_, breaks = c(-Inf,1,2,3,4,5,Inf))),
+       BEANDAY_ = as.ordered(cut(BEANDAY_, breaks = c(-Inf,1,2,3,4,5,Inf))),
+       GRENDAY_ = as.ordered(cut(GRENDAY_, breaks = c(-Inf,1,2,3,4,5,Inf))),
+       ORNGDAY_ = as.ordered(cut(ORNGDAY_, breaks = c(-Inf,1,2,3,4,5,Inf))),
+       VEGEDA1_ = as.ordered(cut(VEGEDA1_, breaks = c(-Inf,1,2,3,4,5,Inf))),
+       CHILDREN = as.ordered(cut(CHILDREN, breaks = c(-Inf,1,2,3,4,5,6,7,Inf))),
+       STRFREQ_ = as.ordered(cut(STRFREQ_, breaks = c(-Inf,1,2,3,4,5,6,7,Inf)))) %>% 
+  as.data.frame()
+
 save(clean_years_final, file = 'intermediate_saves/clean_years_final.RData')
 
+" USE IN MODELS THAT ONLY OPERATE WITH NUMERIC / DISTANCE INPUT
 # Preserve the target vars  and the integers so they are not dummy coded
-targets <- select(clean_years_final, CVDINFR4, CVDCRHD4, CVDSTRK3, ADDEPEV2, year)
+targets <- select(clean_years_final, DIABETE3, CVDSTRK3, ADDEPEV2, year)
 nums <- select_if(clean_years_final, is.numeric)
 # Dummy code input factors
 dummy <- dummyVars(~ HLTHPLN1 + PERSDOC2 + MEDCOST + ASTHMA3 + CHCSCNCR + 
@@ -92,11 +89,6 @@ dummy <- dummyVars(~ HLTHPLN1 + PERSDOC2 + MEDCOST + ASTHMA3 + CHCSCNCR +
               data = clean_years_final, fullRank = TRUE, sep = '_') %>% 
   predict(newdata = clean_years_final)
 
-"
-dummy <- clean_years_final[ , !colnames(clean_years_final) %in% colnames(targets)] %>%
-  dummy_cols(remove_first_dummy = TRUE)
-"
-
 # Recombine normalized integer variables to dummy coded variables
 SVM_data <- cbind(targets, dummy, nums) %>% 
   mutate_if(is.numeric, as.integer)
@@ -104,3 +96,4 @@ SVM_data <- cbind(targets, dummy, nums) %>%
 # Finally!
 NA_prop(SVM_data)
 save(SVM_data, file = 'intermediate_saves/SVM_data.RData')
+"
