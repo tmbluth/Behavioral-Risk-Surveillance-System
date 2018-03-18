@@ -1,23 +1,28 @@
 library(caret)
-library(ROSE)
+library(pROC)
 library(ranger)
 library(dplyr)
 library(doParallel)
 library(klaR)
 
+# Load in custom function used later (downsample_part)
 source('analysis/funcs.r')
+# Load in cleaned data
 load('intermediate_saves/clean_years_final.RData')
+# Remove year since it should not de a determinate in future predictions
 clean_years_final <- dplyr::select(clean_years_final, -year)
 
+# This custom function partitions and downsamples data. There is also a 'upsample_part' function in funcs.R
 db <- downsample_part(df = clean_years_final, target = 'DIABETE3', part.pct = 0.8)
 strk <- downsample_part(clean_years_final, target = 'CVDSTRK3', 0.8)
 dep <- downsample_part(clean_years_final, target = 'ADDEPEV2', 0.8)
 
 #==================== Variable Importance ======================#
 
-registerDoParallel(makeCluster(detectCores()-4))
+# Use 75% of cores available for faster parallel computing
+registerDoParallel(makeCluster(round(detectCores()*0.75,0)))
 
-# Feature Importance must be found to see if any variables can be excluded across the board.
+# Feature/variable Importance must be found to see if any variables can be excluded for a shorter survey in the end
 # Models with mtry that is the rounded square root of the number of columns will be assessed with this measure
 
 vi_db  <- ranger(DIABETE3 ~ .,
@@ -45,7 +50,7 @@ barplot(sort(vi_db$variable.importance, decreasing = T), axes = F, las = 2, main
 barplot(sort(vi_strk$variable.importance, decreasing = T), axes = F, las = 2, main = 'Stroke Variables of Importance')
 barplot(sort(vi_dep$variable.importance, decreasing = T), axes = F, las = 2, main = 'Depression Variables of Importance')
 
-# Bottom 10 variables in prediction importance across all 3 models are removed
+# Top ~20 variables in prediction importance across all 3 models are used
 # Diabetes
 db <- map(db, function(x)
   dplyr::select(x, 
@@ -81,7 +86,7 @@ rf_db_3  <- ranger(DIABETE3 ~ .,
                    mtry = 3,
                    splitrule = 'gini',
                    probability = TRUE)
-rf_db_3$prediction.error
+rf_db_3$prediction.error # This checks out-of-bag model error. 1 - error = accuracy
 
 rf_db_6  <- ranger(DIABETE3 ~ .,
                    data = db$Train_set,
@@ -148,8 +153,13 @@ save(rf_db_3, rf_strk_3, rf_dep_3, file = 'intermediate_saves/rf_models.Rdata')
 
 # Predict RF models
 rf_db_p <- predict(rf_db_3, db$Test_set)$predictions[,1]
+auc(db$Test_set$DIABETE3, rf_db_p)
+
 rf_strk_p <- predict(rf_strk_3, strk$Test_set)$predictions[,1]
+auc(strk$Test_set$CVDSTRK3, rf_strk_p)
+
 rf_dep_p <- predict(rf_dep_3, dep$Test_set)$predictions[,1]
+auc(dep$Test_set$ADDEPEV2, rf_dep_p)
 
 save(rf_db_p, rf_strk_p, rf_dep_p, file = 'intermediate_saves/rf_p.RData')
 
@@ -173,6 +183,7 @@ glm_db <- train(make.names(DIABETE3) ~ .,
                 family = 'binomial', 
                 tuneGrid = glm_tune,
                 trControl = ctrl)
+glm_db$results
 
 glm_strk <- train(make.names(CVDSTRK3) ~ .,
                   data = strk$Train_set,
@@ -181,6 +192,7 @@ glm_strk <- train(make.names(CVDSTRK3) ~ .,
                   family = 'binomial',
                   tuneGrid = glm_tune,
                   trControl = ctrl)
+glm_strk$results
 
 system.time(
 glm_dep <- train(make.names(ADDEPEV2) ~ .,
@@ -191,17 +203,13 @@ glm_dep <- train(make.names(ADDEPEV2) ~ .,
                  tuneGrid = glm_tune,
                  trControl = ctrl)
 )
+glm_dep$results
 
 save(glm_db, glm_strk, glm_dep, file = 'intermediate_saves/glm_models.RData')
 
 glm_db_p <- predict(glm_db, db$Test_set, type = 'prob')$X1
-confusionMatrix(ifelse(glm_db_p > 0.5, 1, 2), db$Test_set$DIABETE3)
-
 glm_strk_p <- predict(glm_strk, strk$Test_set, type = 'prob')$X1
-confusionMatrix(ifelse(glm_strk_p > 0.5, 1, 2), strk$Test_set$CVDSTRK3)
-
 glm_dep_p <- predict(glm_dep, dep$Test_set, type = 'prob')$X1
-confusionMatrix(ifelse(glm_dep_p > 0.5, 1, 2), dep$Test_set$ADDEPEV2)
 
 save(glm_db_p, glm_strk_p, glm_dep_p, file = 'intermediate_saves/glm_p.RData')
 
@@ -214,6 +222,7 @@ nb_db <- NaiveBayes(x = dplyr::select(db$Train_set, -DIABETE3),
                     fL = 0.5,
                     useKernel = TRUE,
                     adjust = 0.5)
+
 
 system.time(
 nb_strk <- NaiveBayes(x = dplyr::select(strk$Train_set, -CVDSTRK3),
@@ -230,13 +239,13 @@ save(nb_db, nb_strk, nb_dep, file = 'intermediate_saves/nb_models.RData')
 
 # Predictions
 nb_db_p <- predict(nb_db, db$Test_set, type = 'prob')
-confusionMatrix(nb_db_p$class, db$Test_set$DIABETE3)
+auc(db$Test_set$DIABETE3, nb_db_p$posterior[,1])
 
 nb_strk_p <- predict(nb_strk, strk$Test_set, type = 'prob')
-confusionMatrix(nb_strk_p$class, strk$Test_set$CVDSTRK3)
+auc(strk$Test_set$CVDSTRK3, nb_strk_p$posterior[,1])
 
 nb_dep_p <- predict(nb_dep, dep$Test_set, type = 'prob')
-confusionMatrix(nb_dep_p$class, dep$Test_set$ADDEPEV2)
+auc(dep$Test_set$ADDEPEV2, nb_dep_p$posterior[,1])
 
 save(nb_db_p, nb_strk_p, nb_dep_p, file = 'intermediate_saves/nb_p.RData')
 
@@ -349,8 +358,8 @@ svm_db <- train(DIABETE3 ~ .,
                                         number = 5,
                                         sampling = 'down'))
 
-
-coords(roc, x = 'best', best.method = 'closest.topleft')
+svm_roc <- roc(X)
+coords(svm_roc, x = 'best', best.method = 'closest.topleft')
 "
 
 
