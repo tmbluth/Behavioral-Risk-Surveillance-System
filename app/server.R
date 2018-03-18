@@ -1,5 +1,5 @@
 library(shiny)
-
+setwd('./app')
 # Read the survey questions
 Qlist <- read.csv("Q_cat.csv")
 
@@ -10,7 +10,7 @@ shinyServer(function(input, output) {
   results <<- rep("", nrow(Qlist))
   # Name each element of the vector based on the
   # second column of the Qlist
-  names(results)  <<- Qlist[,2]
+  names(results)  <<- Qlist[,3]
   
   
   # This renderUI function holds the primary actions of the
@@ -26,14 +26,14 @@ shinyServer(function(input, output) {
     if (input$Click.Counter==0) 
       return(
         list(
-          h5("Welcome to Shiny Survey Tool!"),
-          h6("by Francis Smart")
+          h5("Welcome to the Chronic Disease Risk Calculator"),
+          h6("by Taylor Bluth (courtesy of Francis Smart)")
         )
       )
     
     # Once the next button has been clicked once we see each question
     # of the survey.
-    if (input$Click.Counter>0 & input$Click.Counter<=25)  
+    if (input$Click.Counter>0 & input$Click.Counter<30)  
       return(
         list(
           h5(textOutput("question")),
@@ -44,12 +44,12 @@ shinyServer(function(input, output) {
     
     # Once the next button has been clicked once we see each question
     # of the survey.
-    if (input$Click.Counter>25 & input$Click.Counter<=nrow(Qlist))  
+    if (input$Click.Counter>=30 & input$Click.Counter<=nrow(Qlist))  
       return(
         list(
           h5(textOutput("question")),
           numericInput("survey", "Please Select:", 
-                       value = 0, min = 0, max = 75)
+                       value = 0, min = 0, max = 50)
         )
       )
     
@@ -111,7 +111,7 @@ shinyServer(function(input, output) {
   
   # The option list is a reative list of elements that updates itself when the click counter is advanced.
   option.list <- reactive({
-    qlist <- Qlist[input$Click.Counter,3:ncol(Qlist)]
+    qlist <- Qlist[input$Click.Counter,4:ncol(Qlist)]
     # Remove items from the qlist if the option is empty.
     # Also, convert the option list to matrix. 
     as.matrix(qlist[qlist!=""])
@@ -122,8 +122,10 @@ shinyServer(function(input, output) {
   output$question <- renderText({
     paste0(
       "Q", input$Click.Counter,":", 
-      Qlist[input$Click.Counter,2]
+      Qlist[input$Click.Counter,3]
     )
   })
   
 })
+
+runApp()

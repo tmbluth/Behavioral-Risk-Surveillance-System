@@ -4,22 +4,17 @@ library(shiny)
 shinyUI(pageWithSidebar(
   
   #  Application title
-  headerPanel("Shiny Survey Tool v.01"),
+  headerPanel("Chronic Disease Risk Calculator"),
   
   sidebarPanel(
     # This is intentionally an empty object.
     h6(textOutput("save.results")),
     h5("Created by:"),
-    tags$a("Econometrics by Simulation", 
-           href="http://www.econometricsbysimulation.com"),
-    h5("For details on how data is generated:"),
-    tags$a("Blog Post", 
-           href=paste0("http://www.econometricsbysimulation.com/",
-                       "2013/19/Shiny-Survey-Tool.html")),
+    tags$a("Taylor Bluth", 
+           href="https://www.linkedin.com/in/tmbluth"),
     h5("Github Repository:"),
-    tags$a("Survey-Tool", 
-           href=paste0("https://github.com/EconometricsBySimulation/",
-                       "Shiny-Demos/tree/master/Survey")),
+    tags$a("Chronic Disease Risk Calculator", 
+           href= "https://github.com/tmbluth/Behavioral-Risk-Surveillance-System"),
     # Display the page counter text.
     h5(textOutput("counter"))
   ),
@@ -35,10 +30,3 @@ shinyUI(pageWithSidebar(
   )
 ))
 
-"
-  # PHYSHLTH
-  # Copy the line below to make a slider bar 
-  sliderInput('slider1', label = h3('Physical Health'), min = 0, max = 30)
-
-  hr(),
- " 
