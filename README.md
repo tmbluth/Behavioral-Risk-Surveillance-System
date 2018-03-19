@@ -22,9 +22,9 @@ Prevalence statistics across time are already available on the CDC's website (ht
 
 Obstacles Overcome:
 
--Since this data is collected from phone surveys there was plenty of missing data. Also, this is a social science / health study which meant there is high variability, making models hard to optimize for accuracy. In this case however, accuracy is not the aim, but rather a precise estimate of probability. 
--Survey data was stored in integer values only (though the integers represented categories most of the time) so dealing with that and conversion to missing data (7, 77, 777, 9, 99 and 999 = missing, 97 and 98 were sometimes missing, 8, 88, and 888 were 'None'/0, etc).
--Computing time was an issue, so installing Linux and using the command line to communicate with my university's computer network helped gain computational resources. Downsampling was also used on each respective test and training set of the outcomes to speed things up. Using packages such as `ranger` (`ranger` algorithm) and `klaR` (`NaiveBayes` algorithm) outside of `caret`'s `train()` also greatly sped up the process.
+* Since this data is collected from phone surveys there was plenty of missing data. Also, this is a social science / health study which meant there is high variability, making models hard to optimize for accuracy. In this case however, accuracy is not the aim, but rather a precise estimate of probability. 
+* Survey data was stored in integer values only (though the integers represented categories most of the time) so dealing with that and conversion to missing data (7, 77, 777, 9, 99 and 999 = missing, 97 and 98 were sometimes missing, 8, 88, and 888 were 'None'/0, etc).
+* Computing time was an issue, so installing Linux and using the command line to communicate with my university's computer network helped gain computational resources. Downsampling was also used on each respective test and training set of the outcomes to speed things up. Using packages such as `ranger` (`ranger` algorithm) and `klaR` (`NaiveBayes` algorithm) outside of `caret`'s `train()` also greatly sped up the process.
 
 ----
 
