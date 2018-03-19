@@ -78,7 +78,7 @@ dep <- map(dep, function(x)
 
 save(db, strk, dep, file = 'intermediate_saves/targets.RData')
 
-#==================== Random Forest (Ranger) Models: ======================#
+#==================== Random Forest (Ranger) Models ======================#
 
 # 1. Myocardial Infarction (heart attack)
 rf_db_3  <- ranger(DIABETE3 ~ .,
@@ -215,7 +215,7 @@ save(glm_db_p, glm_strk_p, glm_dep_p, file = 'intermediate_saves/glm_p.RData')
 
 rm(glm_db, glm_db_p, glm_strk, glm_strk_p, glm_dep, glm_dep_p, glm_tune, ctrl)
 
-#=========================== Naive Bayes Models: ===========================#
+#=========================== Naive Bayes Models ===========================#
 
 nb_db <- NaiveBayes(x = dplyr::select(db$Train_set, -DIABETE3),
                     grouping = db$Train_set$DIABETE3,
@@ -307,38 +307,7 @@ confusionMatrix(ifelse(stroke$RF > 0.6, 1, 2), strk$Test_set$DIABETE3)
 confusionMatrix(ifelse(depression$RF > 0.6, 1, 2), dep$Test_set$ADDEPEV2)
 
 
-#========================== USE THE MODELS ==================================#
-
-# For possible responses check out lists below:
-load('intermediate_saves/targets.RData')
-
-# Diabetes Model Inputs
-sapply(db$Test_set, levels)
-# Stroke Model Inputs
-sapply(strk$Test_set, levels)
-# Depression Model Inputs
-sapply(dep$Test_set, levels)
-
-# The RF models take up 6GB of memory so be aware of your capacity
-load('intermediate_saves/rf_models.RData')
-
-# Enter your results. Questions (and possible responses) can be found in the 'app' folder in the file 'Q_cat.csv'
-# App version will be much more user friendly when completed
-predict(rf_db_3, data.frame(GENHLTH = '', X_RFHYPE5 = '', X_BMI5CAT = '', X_RFCHOL = '', EMPLOYMENT = '', 
-                            CHECKUP1 = '', USEEQUIP = '', CVDINFR4 = '', RACE = '', PHYSHLTH = '', 
-                            CVDCRHD4 = '', SEX = '', EDUCA = '', PERSDOC2 = '', HAVARTH3 = '',
-                            INCOME2 = '', X_RFBING5 = '', PA_BENCHMARK = '', LIMITED = '', STRFREQ_ = ''), type = "prob")
-predict(rf_strk_3, data.frame(EMPLOYMENT = '', CVDINFR4 = '', X_AGE_G = '', GENHLTH = '', CVDCRHD4 = '', 
-                              X_RFHYPE5 = '' = '', USEEQUIP = '', LIMITED = '', PHYSHLTH = '' = '', HAVARTH3 = '',
-                              DIABETE3 = '', INCOME2 = '', MARITAL = '', X_RFCHOL = '', CHCCOPD = '',
-                              EDUCA = '', PA_BENCHMARK = '', X_SMOKER3 = '', RENTHOM1 = '', ADDEPEV2 = ''), type = "prob")
-predict(rf_dep_3, data.frame(MENTHLTH = '', LIMITED = '', EMPLOYMENT = '', X_AGE_G = '', SEX = '',
-                             GENHLTH = '', HAVARTH3 = '', X_SMOKER3 = '', MEDCOST = '', MARITAL = '',
-                             PHYSHLTH = '', RACE = '', X_RFCHOL = '', USEEQUIP = '', ASTHMA3 = '',
-                             RENTHOM1 = '', CHCCOPD = '', INCOME2 = '', X_BMI5CAT = '', X_RFHYPE5,
-                             PA_BENCHMARK = '', PERSDOC2 = ''), type = "prob")
-
-#=============================== SVM Models: ===============================#
+#=============================== SVM Models (UNUSED) ===============================#
 
 " Future work using gputools' gpuSvmTrain:
 load('intermediate_saves/SVM_data.RData')
