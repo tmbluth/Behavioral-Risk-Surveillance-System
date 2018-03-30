@@ -82,93 +82,48 @@ dep <- map(dep, function(x)
 save(db, strk, dep, file = 'intermediate_saves/targets.RData')
 
 #==================== Random Forest (Ranger) Models ======================#
-
+  
 # 1. Myocardial Infarction (heart attack)
-rf_db_3  <- ranger(DIABETE3 ~ .,
-                   data = db$Train_set,
-                   mtry = 3,
-                   splitrule = 'gini',
-                   probability = TRUE)
-rf_db_3$prediction.error # This checks out-of-bag model error. 1 - error = accuracy
-
-rf_db_6  <- ranger(DIABETE3 ~ .,
-                   data = db$Train_set,
-                   mtry = round(sqrt(ncol(db$Train_set)),0),
-                   splitrule = 'gini',
-                   probability = TRUE)
-rf_db_6$prediction.error
-
-rf_db_15 <- ranger(DIABETE3 ~ .,
-                   data = db$Train_set,
-                   mtry = 15,
-                   splitrule = 'gini',
-                   probability = TRUE)
-rf_db_15$prediction.error
+rf_db <- train(DIABETE3 ~ .,
+               data = db$Train_set,
+               method = 'ranger',
+               trControl = trainControl(method = 'oob', verboseIter = TRUE),
+               tuneGrid = expand.grid(mtry = c(3, round(sqrt(ncol(db$Train_set)),0), 15), splitrule = 'gini', probability = TRUE)
+               )
+rf_db
 
 # 2. Stroke 
-rf_strk_3  <- ranger(CVDSTRK3 ~ .,
-                     data = strk$Train_set,
-                     mtry = 3,
-                     splitrule = 'gini',
-                     probability = TRUE)
-rf_strk_3$prediction.error
-
-system.time(
-rf_strk_6 <- ranger(CVDSTRK3 ~ .,
-                    data = strk$Train_set,
-                    mtry = round(sqrt(ncol(strk$Train_set)),0),
-                    splitrule = 'gini',
-                    probability = TRUE)
-)
-rf_strk_6$prediction.error
-
-rf_strk_15 <- ranger(CVDSTRK3 ~ .,
-                     data = strk$Train_set,
-                     mtry = 15,
-                     splitrule = 'gini',
-                     probability = TRUE) 
-rf_strk_15$prediction.error
+rf_strk <- train(CVDSTRK3 ~ .,
+               data = strk$Train_set,
+               method = 'ranger',
+               trControl = trainControl(method = 'oob', verboseIter = TRUE),
+               tuneGrid = expand.grid(mtry = c(3, round(sqrt(ncol(strk$Train_set)),0), 15), splitrule = 'gini', probability = TRUE)
+               )
 
 # 3. Depression
-rf_dep_3  <- ranger(ADDEPEV2 ~ .,
-                    data = dep$Train_set,
-                    mtry = 3,
-                    splitrule = 'gini',
-                    probability = TRUE)
-rf_dep_3$prediction.error
-
-rf_dep_6  <- ranger(ADDEPEV2 ~ .,
-                    data = dep$Train_set,
-                    mtry = round(sqrt(ncol(dep$Train_set)),0),
-                    splitrule = 'gini',
-                    probability = TRUE)
-rf_dep_6$prediction.error
-
-rf_dep_15 <- ranger(ADDEPEV2 ~ .,
-                    data = dep$Train_set,
-                    mtry = 15,
-                    splitrule = 'gini',
-                    probability = TRUE)
-rf_dep_15$prediction.error
+rf_dep <- train(ADDEPEV2 ~ .,
+               data = dep$Train_set,
+               method = 'ranger',
+               trControl = trainControl(method = 'oob', verboseIter = TRUE),
+               tuneGrid = expand.grid(mtry = c(3, round(sqrt(ncol(dep$Train_set)),0), 15), splitrule = 'gini', probability = TRUE)
+               )
 
 # Only the highest performing models will be saved.
-save(rf_db_3, rf_strk_3, rf_dep_3, file = 'intermediate_saves/rf_models.Rdata')
+save(rf_db, rf_strk, rf_dep, file = 'intermediate_saves/rf_models.Rdata')
 
 # Predict RF models
-rf_db_p <- predict(rf_db_3, db$Test_set)$predictions[,1]
+rf_db_p <- predict(rf_db$finalModel, db$Test_set)$predictions[,1]
 auc(db$Test_set$DIABETE3, rf_db_p)
 
-rf_strk_p <- predict(rf_strk_3, strk$Test_set)$predictions[,1]
+rf_strk_p <- predict(rf_strk$finalModel, strk$Test_set)$predictions[,1]
 auc(strk$Test_set$CVDSTRK3, rf_strk_p)
 
-rf_dep_p <- predict(rf_dep_3, dep$Test_set)$predictions[,1]
+rf_dep_p <- predict(rf_dep$finalModel, dep$Test_set)$predictions[,1]
 auc(dep$Test_set$ADDEPEV2, rf_dep_p)
 
 save(rf_db_p, rf_strk_p, rf_dep_p, file = 'intermediate_saves/rf_p.RData')
 
-rm(rf_db_3, rf_db_6, rf_db_15, rf_db_p,
-   rf_strk_3, rf_strk_6, rf_strk_15, rf_strk_p,
-   rf_dep_3, rf_dep_6, rf_dep_15, rf_dep_p)
+rm(rf_db, rf_db_p, rf_strk, rf_strk_p, rf_dep, rf_dep_p)
 
 #============================ GLMnet Models ================================#
 
