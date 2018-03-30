@@ -26,22 +26,25 @@ registerDoParallel(makeCluster(round(detectCores()*0.75,0)))
 # Models with mtry that is the rounded square root of the number of columns will be assessed with this measure
 
 vi_db  <- ranger(DIABETE3 ~ .,
-                   data = db$Train_set,
-                   mtry = round(sqrt(ncol(db$Train_set)),0),
-                   splitrule = 'gini',
-                   importance = 'permutation')$variable.importance
+                 data = db$Train_set,
+                 mtry = round(sqrt(ncol(db$Train_set)),0),
+                 splitrule = 'gini',
+                 write.forest = FALSE,
+                 importance = 'permutation')$variable.importance
 
 vi_strk <- ranger(CVDSTRK3 ~ .,
-                    data = strk$Train_set,
-                    mtry = round(sqrt(ncol(strk$Train_set)),0),
-                    splitrule = 'gini',
-                    importance = 'permutation')$variable.importance
+                 data = strk$Train_set,
+                 mtry = round(sqrt(ncol(strk$Train_set)),0),
+                 splitrule = 'gini',
+                 write.forest = FALSE,
+                 importance = 'permutation')$variable.importance
 
 vi_dep <- ranger(ADDEPEV2 ~ .,
-                    data = dep$Train_set,
-                    mtry = round(sqrt(ncol(dep$Train_set)),0),
-                    splitrule = 'gini',
-                    importance = 'permutation')$variable.importance
+                 data = dep$Train_set,
+                 mtry = round(sqrt(ncol(dep$Train_set)),0),
+                 splitrule = 'gini',
+                 write.forest = FALSE,   
+                 importance = 'permutation')$variable.importance
 
 save(vi_db, vi_strk, vi_dep, file = 'intermediate_saves/vi.RData')
 
