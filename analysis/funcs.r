@@ -50,30 +50,32 @@ rf_tune <- function(.target, .data, .mtry, .num.trees, .importance = 'none'){
 
 #=====================================================================================================#
 
-downsample_part <- function(df, target, part.pct) {
+downsample_part <- function(df, target, train.pct, val.pct) {
 require(caret)
-  part <- createDataPartition(df[, target], p = part.pct, list = FALSE)
-  Train <- df[part, ]
-  Train <- downSample(x = Train[, names(Train) != target], 
-                         y = Train[, target],
-                         yname = target)
-  Test <- df[-part, ]
-  Test <- downSample(x = Test[, names(Test) != target],
-                        y = Test[, target],
-                        yname = target)
-  return(list(Train_set = Train, Test_set = Test))
+  down_data <- downSample(x = df[, names(df) != target], 
+                          y = df[, target],
+                          yname = target)
+  train_part <- createDataPartition(down_data[, target], p = train.pct, list = FALSE)
+  train_val <- down_data[train_part, ]
+  val_part <- createDataPartition(train_val[, target], p = val.pct, list = FALSE)
+  Train <- train_val[-val_part, ]
+  Validate <- train_val[val_part, ]
+  Test <- down_data[-train_part, ]
+
+  return(list(Train_set = Train, Valid_set = Validate, Test_set = Test))
 }
 
-upsample_part <- function(df, target, part.pct) {
+upsample_part <- function(df, target, train.pct, val.pct) {
   require(caret)
-  part <- createDataPartition(df[, target], p = part.pct, list = FALSE)
-  Train <- df[part, ]
-  Train <- upSample(x = Train[, names(Train) != target], 
-                      y = Train[, target],
+  up_data <- upSample(x = df[, names(df) != target], 
+                      y = df[, target],
                       yname = target)
-  Test <- df[-part, ]
-  Test <- upSample(x = Test[, names(Test) != target],
-                     y = Test[, target],
-                     yname = target)
-  return(list(Train_set = Train, Test_set = Test))
+  train_part <- createDataPartition(up_data[, target], p = train.pct, list = FALSE)
+  train_val <- up_data[train_part, ]
+  val_part <- createDataPartition(train_val[, target], p = val.pct, list = FALSE)
+  Train <- train_val[-val_part, ]
+  Validate <- train_val[val_part, ]
+  Test <- up_data[-train_part, ]
+  
+  return(list(Train_set = Train, Valid_set = Validate, Test_set = Test))
 }
