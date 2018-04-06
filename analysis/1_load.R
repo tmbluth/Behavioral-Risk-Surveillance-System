@@ -1,7 +1,7 @@
 library(data.table)
 library(dplyr)
 library(forcats)
-# /home/tmbluth/Documents/GitHub/Behavioral-Risk-Surveillance-System/
+
 source('analysis/funcs.r')
 
 # List format
