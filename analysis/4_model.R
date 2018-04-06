@@ -13,9 +13,9 @@ load('intermediate_saves/clean_years_final.RData')
 clean_years_final <- dplyr::select(clean_years_final, -year)
 
 # This custom function partitions and downsamples data. There is also a 'upsample_part' function in funcs.R
-db <- downsample_part(df = clean_years_final, target = 'DIABETE3', train.pct = 0.8, val.pct = 0.15)
-strk <- downsample_part(clean_years_final, target = 'CVDSTRK3', 0.8, 0.15)
-dep <- downsample_part(clean_years_final, target = 'ADDEPEV2', 0.8, 0.15)
+db <- downsample_part(df = clean_years_final, target = 'DIABETE3', train.pct = 0.8, val.pct = 0.10)
+strk <- downsample_part(clean_years_final, target = 'CVDSTRK3', 0.8, 0.10)
+dep <- downsample_part(clean_years_final, target = 'ADDEPEV2', 0.8, 0.10)
 
 #==================== Variable Importance ======================#
 
@@ -81,6 +81,8 @@ save(db, strk, dep, file = 'intermediate_saves/targets.RData')
 #==================== Random Forest (Ranger) Models: ======================#
 
 # ALL MODELS TESTED MANY HYPERPARAMETERS. LOWER mtry PERFORMED BEST ON ALL
+# VALIDATION SET NOT NEEDED ON RF MODELS DUE TO OOB ERROR FEEDBACK ON MODEL PERFORMANCE
+# FASTER RUNTIME OUTSIDE of caret's train()
 
 # 1. Myocardial Infarction (heart attack)
 rf_db_3  <- ranger(DIABETE3 ~ .,
@@ -111,8 +113,6 @@ rf_dep_3$prediction.error
 # Only the highest performing models will be saved.
 save(rf_db_3, rf_strk_3, rf_dep_3, file = 'intermediate_saves/rf_models.Rdata')
 
-# VALIDATION SET NOT NEEDED ON RF MODELS DUE TO OOB ERROR FEEDBACK ON MODEL PERFORMANCE
-
 # Predict RF models
 rf_db_p <- predict(rf_db_3, db$Test_set)$predictions[,1]
 auc(db$Test_set$DIABETE3, rf_db_p)
@@ -131,6 +131,7 @@ rm(rf_db_3, rf_db_6, rf_db_15, rf_db_p,
 
 #============================ GLMnet Models ================================#
 
+# DOES NOT NEED VALIDATION SET DUE TO CROSS-VALIDATION IN trainControl
 ctrl <- trainControl(method = 'cv',
                      number = 5,
                      summaryFunction = twoClassSummary,
@@ -146,8 +147,6 @@ glm_db <- train(make.names(DIABETE3) ~ .,
                 tuneGrid = glm_tune,
                 trControl = ctrl)
 glm_db$results
-glm_db_valid <- predict(glm_db, db$Valid_set, type = 'prob')$X1
-confusionMatrix(glm_db_valid, db$Valid_set$DIABETE3)
 
 glm_strk <- train(make.names(CVDSTRK3) ~ .,
                   data = strk$Train_set,
@@ -157,8 +156,6 @@ glm_strk <- train(make.names(CVDSTRK3) ~ .,
                   tuneGrid = glm_tune,
                   trControl = ctrl)
 glm_strk$results
-glm_strk_valid <- predict(glm_strk, strk$Valid_set, type = 'prob')$X1
-confusionMatrix(glm_strk_valid, dep$Valid_set$CVDSTRK3)
 
 system.time(
 glm_dep <- train(make.names(ADDEPEV2) ~ .,
@@ -170,8 +167,6 @@ glm_dep <- train(make.names(ADDEPEV2) ~ .,
                  trControl = ctrl)
 )
 glm_dep$results
-glm_dep_valid <- predict(glm_dep, dep$Valid_set, type = 'prob')$X1
-confusionMatrix(glm_dep_valid, dep$Valid_set$ADDEPEV2)
 
 save(glm_db, glm_strk, glm_dep, file = 'intermediate_saves/glm_models.RData')
 
@@ -181,20 +176,21 @@ glm_dep_p <- predict(glm_dep, dep$Test_set, type = 'prob')$X1
 
 save(glm_db_p, glm_strk_p, glm_dep_p, file = 'intermediate_saves/glm_p.RData')
 
-rm(glm_db, glm_db_valid, glm_db_p, 
-   glm_strk, glm_strk_valid, glm_strk_p, 
-   glm_dep, glm_dep_valid, glm_dep_p, 
+rm(glm_db, glm_db_p, 
+   glm_strk, glm_strk_p, 
+   glm_dep, glm_dep_p, 
    glm_tune, ctrl)
 
 #=========================== Naive Bayes Models: ===========================#
 
+# RUNS MUCH FASTER OUTSIDE OF train()
 nb_db <- NaiveBayes(x = dplyr::select(db$Train_set, -DIABETE3),
                     grouping = db$Train_set$DIABETE3,
                     fL = 0.5,
                     useKernel = TRUE,
                     adjust = 0.5)
 nb_db_valid <- predict(nb_db, db$Valid_set, type = 'prob')$posterior[,1]
-confusionMatrix(nb_db_valid, db$Valid_set$DIABETE3)
+confusionMatrix(ifelse(nb_db_valid > 0.5, '1', '2'), db$Valid_set$DIABETE3)
 
 system.time(
 nb_strk <- NaiveBayes(x = dplyr::select(strk$Train_set, -CVDSTRK3),
@@ -202,14 +198,14 @@ nb_strk <- NaiveBayes(x = dplyr::select(strk$Train_set, -CVDSTRK3),
                       fL = 1)
 )
 nb_strk_valid <- predict(nb_strk, strk$Valid_set, type = 'prob')$posterior[,1]
-confusionMatrix(nb_strk_valid, strk$Valid_set$CVDSTRK3)
+confusionMatrix(ifelse(nb_strk_valid > 0.5, '1', '2'), strk$Valid_set$CVDSTRK3)
 
 nb_dep <- NaiveBayes(x = dplyr::select(dep$Train_set, -ADDEPEV2),
                      grouping = dep$Train_set$ADDEPEV2,
                      fL = 1,
                      useKernel = TRUE)
 nb_dep_valid <- predict(nb_dep, dep$Valid_set, type = 'prob')$posterior[,1]
-confusionMatrix(nb_dep_valid, dep$Valid_set$ADDEPEV2)
+confusionMatrix(ifelse(nb_dep_valid > 0.5, '1', '2'), dep$Valid_set$ADDEPEV2)
 
 save(nb_db, nb_strk, nb_dep, file = 'intermediate_saves/nb_models.RData')
 
@@ -315,31 +311,3 @@ predict(rf_dep_3, data.frame(MENTHLTH = '', LIMITED = '', EMPLOYMENT = '', X_AGE
                              PHYSHLTH = '', RACE = '', X_RFCHOL = '', USEEQUIP = '', ASTHMA3 = '',
                              RENTHOM1 = '', CHCCOPD = '', INCOME2 = '', X_BMI5CAT = '', X_RFHYPE5,
                              PA_BENCHMARK = '', PERSDOC2 = ''), type = "prob")
-
-#=============================== SVM Models: ===============================#
-
-" Future work using gputools' gpuSvmTrain:
-load('intermediate_saves/SVM_data.RData')
-
-svm_train <- filter(clean_years_final, year != '2015') 
-svm_Test_set <- filter(clean_years_final, year == '2015') 
-
-prop.table(table(svm_train$DIABETE3)); prop.table(table(svm_Test_set$DIABETE3))
-prop.table(table(svm_train$CVDSTRK3)); prop.table(table(svm_Test_set$CVDSTRK3))
-prop.table(table(svm_train$ADDEPEV2)); prop.table(table(svm_Test_set$ADDEPEV2))
-
-svm_db <- train(DIABETE3 ~ .,
-               data = svm_train,
-               method = 'svmLinear',
-               tuneGrid = data.frame(C = c(1, 10, 20)),
-               trControl = trainControl(method = 'cv',
-                                        number = 5,
-                                        sampling = 'down'))
-
-svm_roc <- roc(X)
-coords(svm_roc, x = 'best', best.method = 'closest.topleft')
-"
-
-
-
-
