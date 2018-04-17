@@ -8,10 +8,16 @@ The CDC has been collecting behavioral, demographic, and disease info on million
 
 ----
 
+Project Benefit:
+
+The risk calculator tool will give risk of the 3 chronic conditions mentioned above and will be more comprehensive than other population specific calculators found on the web. Due to its increased number of inputs it is likely much more accurate than 5 - 10 question tools found elsewhere. 
+
+----
+
 Methods:
 
-1.	Feature selection: there are hundreds of columns so I have narrowed things down to only relevant questions to fit into a survey. Theory based filtering was used which filtered down to 45 questions. To make things easier for the user, random forest variable importance was used to select top 20 to 22 questions (depending on model) of the remaining 45.
-2.	Feature interpretability – As mentioned, RF variable importance was used to show top influencers for each model. Though this is still in progress, I will likely use LIME (Local Interpretable Model-agnostic Explanations) to help uncover the features of importance **and their magnitude** in the decision-making process on predictions.
+1.	Feature selection: Theory based filtering was used which filtered down hundreds of variables to just 45 questions. To make things easier for the user, random forest variable importance was used to select top 20 to 22 questions (depending on model) of the remaining 45.
+2.	Feature interpretability – As mentioned, RF variable importance was used to show top influencers for each model.
 3.	Random Forest, GLM Net, and Naive Bayes Ensemble – these are a powerful algorithms with the ability to crunch hundreds of variables and millions of rows in a reasonable amount of time. The ensemble of the 3 did not boost accuracy too much due to the high correlation of the outputs. For this reason I stuck with random forest models for simplicity. This decision is supported by the ROC analysis.
 4.	Computational Boosts – R’s `doParallel` and `parallel` packages were helpful to speed up computation time. Accessing the computer's GPU through `gputools` and `keras` will speed up the process even further if SVM or deep learning is used in the future.
 
@@ -28,6 +34,11 @@ Obstacles Overcome:
 
 ----
 
-Project Benefit:
+Performance:
 
-The risk calculator tool will give risk of the 3 chronic conditions mentioned above and will be more comprehensive than other population specific calculators found on the web. Due to its increased number of inputs it is likely much more accurate than 5 - 10 question tools found elsewhere. 
+* All model variable importance plots and ROC curves can be seen in the `figures` folder
+![Stroke Variable Importance](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/strk_var_imp.png)
+* Models outputs with high correlation (above 0.9) were not combined for ensemble output since they would not inform each other much
+![Depression Models Correlation](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/dep_cor.png)
+* ROC analysis produced models with AUCs from 0.76 to 0.84. Only top models based off this metric were selected for each outcome.
+![Depression ROC](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/db_rocs.png)
