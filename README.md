@@ -22,6 +22,7 @@ Methods:
 4.	Computational Boosts – R’s `doParallel` and `parallel` packages were helpful to speed up computation time. Accessing the computer's GPU through `gputools` and `keras` will speed up the process even further if SVM or deep learning is used in the future.
 
 These data sets are in csv format on Kaggle and span from 2001 to 2015. Only years 2011, 2013, and 2015 were used however, due to differences in survey structure during other years. Data can be found here: https://www.kaggle.com/cdc/behavioral-risk-factor-surveillance-system/data
+
 Prevalence statistics across time are already available on the CDC's website (https://www.cdc.gov/brfss/brfssprevalence/index.html) and will not be pursued here. 
 
 ----
@@ -36,9 +37,19 @@ Obstacles Overcome:
 
 Performance:
 
-* All model variable importance plots and ROC curves can be seen in the `figures` folder
+All performance and diagnostic plots can be seen in the `figures` folder.
+
+* The variable importance plots give an idea of top predictors for each outcome. Example using stroke as an outcome seen below:
 ![Stroke Variable Importance](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/strk_var_imp.png)
-* Models outputs with high correlation (above 0.9) were not combined for ensemble output since they would not inform each other much
+
+* Models' outputs with high correlation (above 0.9) were not combined for ensemble output since they would not inform each other much. For example when depression was an outcome, prediction probabilities from the GLM and Random Forest models were not combined and averaged, since they gave similar results.
 ![Depression Models Correlation](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/dep_cor.png)
-* ROC analysis produced models with AUCs from 0.76 to 0.84. Only top models based off this metric were selected for each outcome.
-![Depression ROC](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/db_rocs.png)
+
+* ROC analysis produced models with AUCs from 0.76 to 0.84. Only top models based off this metric were selected for each outcome. Below, you can see the Random Forest model barely outperformed other models, so it was used when predicting risk of having diabetes. This of course all depends on the desired cutoff the user wants to specify to determine what risk score is high enough to see a doctor.
+![Diabetes ROC](https://github.com/tmbluth/Chronic-Disease-Risk-Calculator/blob/master/figures/db_rocs.png)
+
+----
+
+App:
+
+The user interface is still under construction, but the code is set up to do all the cleaning, modeling, and prediction to get your personal scores. Just download code from here and data from: https://www.kaggle.com/cdc/behavioral-risk-factor-surveillance-system/data
