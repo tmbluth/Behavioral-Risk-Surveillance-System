@@ -1,9 +1,6 @@
-library(dplyr)
-library(purrr)
-library(stringr)
-library(caret)
+library(tidyverse)
 source('analysis/funcs.r')
-load('intermediate_saves/all_years.RData')
+all_years <- read_rds('intermediate_saves/all_years.rds')
 
 # View all unique responses:
 # for single digit responses 9 = Refused and 7 = Don't Know
@@ -44,7 +41,7 @@ factors.ordered <- c('GENHLTH', 'CHECKUP1', '_AGE_G', 'EDUCA', 'INCOME2', '_BMI5
 setdiff(c(numerics, factors, factors.ordered), names(clean_years)); setdiff(names(clean_years), c(numerics, factors, factors.ordered))
 
 clean_years2 <- clean_years %>% 
-  # Change continuous numeric values into discrete integers
+  # Keep continuous variables as numeric
   mutate_if(names(.) %in% numerics, as.numeric) %>% 
   # Change questions with classes into factors
   mutate_if(names(.) %in% factors, as.factor) %>% 
@@ -57,25 +54,19 @@ clean_years3 <- clean_years2[!is.na(clean_years2$DIABETE3),] %>%
                 .[!is.na(.$ADDEPEV2),]; rm(clean_years2)
 
 # Make NA's into a factor level. This can be used in exploration
-clean_years_NA <- as.data.frame(map_if(.x = clean_years3, .p = is.factor, .f = addNA, ifany = TRUE))
-
-NA_prop(clean_years_NA)
-map_if(clean_years_NA, is.numeric, table, useNA = 'ifany')
-
-clean_years_final <- as.data.frame(map_if(clean_years_NA, is.numeric, function(x) ifelse(is.na(x), round(mean(x, na.rm = TRUE), 1), x))) %>% 
-mutate(PHYSHLTH = as.ordered(cut_width(PHYSHLTH, width = 5, center = 2.5)),
-       MENTHLTH = as.ordered(cut_width(MENTHLTH, width = 5, center = 2.5)),
-       FTJUDA1_ = as.ordered(cut(FTJUDA1_, breaks = c(-Inf,1,2,3,4,5,Inf))),
-       FRUTDA1_ = as.ordered(cut(FRUTDA1_, breaks = c(-Inf,1,2,3,4,5,Inf))),
-       BEANDAY_ = as.ordered(cut(BEANDAY_, breaks = c(-Inf,1,2,3,4,5,Inf))),
-       GRENDAY_ = as.ordered(cut(GRENDAY_, breaks = c(-Inf,1,2,3,4,5,Inf))),
-       ORNGDAY_ = as.ordered(cut(ORNGDAY_, breaks = c(-Inf,1,2,3,4,5,Inf))),
-       VEGEDA1_ = as.ordered(cut(VEGEDA1_, breaks = c(-Inf,1,2,3,4,5,Inf))),
-       CHILDREN = as.ordered(cut(CHILDREN, breaks = c(-Inf,1,2,3,4,5,6,7,Inf))),
-       STRFREQ_ = as.ordered(cut(STRFREQ_, breaks = c(-Inf,1,2,3,4,5,6,7,Inf)))) %>% 
+clean_years_NA <- clean_years3 %>% 
+  map_if(.p = function(x) is.factor(x) & !is.ordered(x), .f = function(x) ifelse(is.na(x), 'Missing', x)) %>% 
   as.data.frame()
+  
+NA_prop(clean_years_final)
 
-save(clean_years_final, file = 'intermediate_saves/clean_years_final.RData')
+clean_years_final <- clean_years_NA %>% 
+  select(-INCOME2) %>% 
+  map_if(is.numeric, function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x)) %>% 
+  as.data.frame() %>% 
+  na.omit()
+
+write_rds(clean_years_final, 'intermediate_saves/clean_years_final.rds')
 
 " USE IN MODELS THAT ONLY OPERATE WITH NUMERIC / DISTANCE INPUT
 # Preserve the target vars  and the integers so they are not dummy coded
@@ -90,10 +81,10 @@ dummy <- dummyVars(~ HLTHPLN1 + PERSDOC2 + MEDCOST + ASTHMA3 + CHCSCNCR +
   predict(newdata = clean_years_final)
 
 # Recombine normalized integer variables to dummy coded variables
-SVM_data <- cbind(targets, dummy, nums) %>% 
+numeric_recode <- cbind(targets, dummy, nums) %>% 
   mutate_if(is.numeric, as.integer)
 
 # Finally!
-NA_prop(SVM_data)
-save(SVM_data, file = 'intermediate_saves/SVM_data.RData')
+NA_prop(numeric_recode)
+save(numeric_recode, file = 'intermediate_saves/numeric_recode.RData')
 "

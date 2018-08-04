@@ -1,21 +1,19 @@
-library(caret)
-library(pROC)
-library(ranger)
-library(dplyr)
+library(tidyverse)
 library(doParallel)
+library(caret)
+library(ranger)
 library(klaR)
+library(pROC)
 
 # Load in custom function used later (downsample_part)
 source('analysis/funcs.r')
-# Load in cleaned data
-load('intermediate_saves/clean_years_final.RData')
-# Remove year since it should not de a determinate in future predictions
-clean_years_final <- dplyr::select(clean_years_final, -year)
+# Load in cleaned data and remove year since it should not de a determinate in future predictions
+clean_years_final <- read_rds('intermediate_saves/clean_years_final.rds') %>% dplyr::select(-year)
 
 # This custom function partitions and downsamples data. There is also a 'upsample_part' function in funcs.R
-db <- downsample_part(df = clean_years_final, target = 'DIABETE3', train.pct = 0.8, val.pct = 0.10)
-strk <- downsample_part(clean_years_final, target = 'CVDSTRK3', 0.8, 0.10)
-dep <- downsample_part(clean_years_final, target = 'ADDEPEV2', 0.8, 0.10)
+db   <- downsample_part(clean_years_final, target = 'DIABETE3', train.pct = 0.8, val.pct = 0.15)
+strk <- downsample_part(clean_years_final, target = 'CVDSTRK3', train.pct = 0.8, val.pct = 0.15)
+dep  <- downsample_part(clean_years_final, target = 'ADDEPEV2', train.pct = 0.8, val.pct = 0.15)
 
 #==================== Variable Importance ======================#
 
@@ -26,68 +24,66 @@ registerDoParallel(makeCluster(round(detectCores()*0.75,0)))
 # Models with mtry that is the rounded square root of the number of columns will be assessed with this measure
 
 vi_db  <- ranger(DIABETE3 ~ .,
-                   data = db$Train_set,
-                   mtry = round(sqrt(ncol(db$Train_set)),0),
-                   splitrule = 'gini',
-                   importance = 'permutation')$variable.importance
+                 data = db$Train_set,
+                 mtry = round(sqrt(ncol(db$Train_set)),0),
+                 splitrule = 'gini',
+                 importance = 'permutation')$variable.importance
 
 vi_strk <- ranger(CVDSTRK3 ~ .,
-                    data = strk$Train_set,
-                    mtry = round(sqrt(ncol(strk$Train_set)),0),
-                    splitrule = 'gini',
-                    importance = 'permutation')$variable.importance
+                  data = strk$Train_set,
+                  mtry = round(sqrt(ncol(strk$Train_set)),0),
+                  splitrule = 'gini',
+                  importance = 'permutation')$variable.importance
 
 vi_dep <- ranger(ADDEPEV2 ~ .,
-                    data = dep$Train_set,
-                    mtry = round(sqrt(ncol(dep$Train_set)),0),
-                    splitrule = 'gini',
-                    importance = 'permutation')$variable.importance
+                 data = dep$Train_set,
+                 mtry = round(sqrt(ncol(dep$Train_set)),0),
+                 splitrule = 'gini',
+                 importance = 'permutation')$variable.importance
 
 save(vi_db, vi_strk, vi_dep, file = 'intermediate_saves/vi.RData')
 
-par(mar = c(10,0,5,1))
-barplot(sort(vi_db$variable.importance, decreasing = T), axes = F, las = 2, main = 'Diabetes Variables of Importance')
-barplot(sort(vi_strk$variable.importance, decreasing = T), axes = F, las = 2, main = 'Stroke Variables of Importance')
-barplot(sort(vi_dep$variable.importance, decreasing = T), axes = F, las = 2, main = 'Depression Variables of Importance')
+par(mar = c(10,5,5,1))
+barplot(sort(vi_db,  decreasing = T), las = 2, main = 'Diabetes Variables of Importance')
+barplot(sort(vi_strk,decreasing = T), las = 2, main = 'Stroke Variables of Importance')
+barplot(sort(vi_dep, decreasing = T), las = 2, main = 'Depression Variables of Importance')
 
-# Top ~20 variables in prediction importance across all 3 models are used
+# Top 17 or 18 variables in prediction importance across all 3 models are used
 # Diabetes
 db <- map(db, function(x)
-  dplyr::select(x, 
-         DIABETE3, GENHLTH, X_RFHYPE5, X_BMI5CAT, X_RFCHOL, EMPLOYMENT, 
-         CHECKUP1, USEEQUIP, CVDINFR4, RACE, PHYSHLTH, 
-         CVDCRHD4, SEX, EDUCA, PERSDOC2, HAVARTH3,
-         INCOME2, X_RFBING5, PA_BENCHMARK, LIMITED, STRFREQ_))
+  dplyr::select(x, DIABETE3, 
+                GENHLTH, X_RFHYPE5, X_AGE_G, X_BMI5CAT,  EMPLOYMENT, 
+                X_RFCHOL, CHECKUP1, USEEQUIP, PHYSHLTH, CVDINFR4, 
+                RACE, CVDCRHD4, FTJUDA1_, PERSDOC2, SEX, EDUCA, 
+                HAVARTH3, LIMITED))
     
 # Stroke
 strk <- map(strk, function(x)
-  dplyr::select(x, 
-         CVDSTRK3, EMPLOYMENT, CVDINFR4, X_AGE_G, GENHLTH, CVDCRHD4, 
-         X_RFHYPE5, USEEQUIP, LIMITED, PHYSHLTH, HAVARTH3,
-         DIABETE3, INCOME2, MARITAL, X_RFCHOL, CHCCOPD,
-         EDUCA, PA_BENCHMARK, X_SMOKER3, RENTHOM1, ADDEPEV2))
+  dplyr::select(x, CVDSTRK3, 
+                CVDINFR4, EMPLOYMENT, X_AGE_G, GENHLTH, CVDCRHD4, 
+                X_RFHYPE5, CVDCRHD4, USEEQUIP, LIMITED, PHYSHLTH, 
+                HAVARTH3, DIABETE3, CHCCOPD, GRENDAY_, MARITAL, 
+                X_RFCHOL, EDUCA))
 
 # Depression
 dep <- map(dep, function(x) 
-  dplyr::select(x, 
-          ADDEPEV2, MENTHLTH, LIMITED, EMPLOYMENT, X_AGE_G, SEX,
-          GENHLTH, HAVARTH3, X_SMOKER3, MEDCOST, MARITAL,
-          PHYSHLTH, RACE, X_RFCHOL, USEEQUIP, ASTHMA3,
-          RENTHOM1, CHCCOPD, INCOME2, X_BMI5CAT, X_RFHYPE5,
-          PA_BENCHMARK, PERSDOC2))
+  dplyr::select(x, ADDEPEV2, 
+                MENTHLTH, LIMITED, SEX, EMPLOYMENT, X_AGE_G,
+                GENHLTH, HAVARTH3, PHYSHLTH, X_SMOKER3, MARITAL,
+                MEDCOST, RACE, ASTHMA3, USEEQUIP, X_RFCHOL,
+                RENTHOM1, CHCCOPD, X_BMI5CAT))
 
-save(db, strk, dep, file = 'intermediate_saves/targets.RData')
+save(db, strk, dep, file = 'intermediate_saves/modeling_data.RData')
 
 #==================== Random Forest (Ranger) Models: ======================#
 
 # ALL MODELS TESTED MANY HYPERPARAMETERS. LOWER mtry PERFORMED BEST ON ALL
-# VALIDATION SET NOT NEEDED ON RF MODELS DUE TO OOB ERROR FEEDBACK ON MODEL PERFORMANCE
-# FASTER RUNTIME OUTSIDE of caret's train()
 
 # 1. Myocardial Infarction (heart attack)
 rf_db_3  <- ranger(DIABETE3 ~ .,
                    data = db$Train_set,
                    mtry = 3,
+                   num.trees = 200,
                    splitrule = 'gini',
                    probability = TRUE)
 rf_db_3$prediction.error # This checks out-of-bag model error. 1 - error = accuracy
@@ -97,6 +93,7 @@ rf_db_3$prediction.error # This checks out-of-bag model error. 1 - error = accur
 rf_strk_3  <- ranger(CVDSTRK3 ~ .,
                      data = strk$Train_set,
                      mtry = 3,
+                     num.trees = 200,
                      splitrule = 'gini',
                      probability = TRUE)
 rf_strk_3$prediction.error
@@ -106,12 +103,15 @@ rf_strk_3$prediction.error
 rf_dep_3  <- ranger(ADDEPEV2 ~ .,
                     data = dep$Train_set,
                     mtry = 3,
+                    num.trees = 200,
                     splitrule = 'gini',
                     probability = TRUE)
 rf_dep_3$prediction.error
 
 # Only the highest performing models will be saved.
 save(rf_db_3, rf_strk_3, rf_dep_3, file = 'intermediate_saves/rf_models.Rdata')
+
+# VALIDATION SET NOT NEEDED ON RF MODELS DUE TO OOB ERROR FEEDBACK ON MODEL PERFORMANCE
 
 # Predict RF models
 rf_db_p <- predict(rf_db_3, db$Test_set)$predictions[,1]
@@ -125,13 +125,12 @@ auc(dep$Test_set$ADDEPEV2, rf_dep_p)
 
 save(rf_db_p, rf_strk_p, rf_dep_p, file = 'intermediate_saves/rf_p.RData')
 
-rm(rf_db_3, rf_db_6, rf_db_15, rf_db_p,
-   rf_strk_3, rf_strk_6, rf_strk_15, rf_strk_p,
-   rf_dep_3, rf_dep_6, rf_dep_15, rf_dep_p)
+rm(rf_db_3, rf_db_p,
+   rf_strk_3, rf_strk_p,
+   rf_dep_3, rf_dep_p)
 
 #============================ GLMnet Models ================================#
 
-# DOES NOT NEED VALIDATION SET DUE TO CROSS-VALIDATION IN trainControl
 ctrl <- trainControl(method = 'cv',
                      number = 5,
                      summaryFunction = twoClassSummary,
@@ -147,6 +146,8 @@ glm_db <- train(make.names(DIABETE3) ~ .,
                 tuneGrid = glm_tune,
                 trControl = ctrl)
 glm_db$results
+glm_db_valid <- predict(glm_db, db$Valid_set, type = 'prob')$X1
+confusionMatrix(glm_db_valid, db$Valid_set$DIABETE3)
 
 glm_strk <- train(make.names(CVDSTRK3) ~ .,
                   data = strk$Train_set,
@@ -156,6 +157,8 @@ glm_strk <- train(make.names(CVDSTRK3) ~ .,
                   tuneGrid = glm_tune,
                   trControl = ctrl)
 glm_strk$results
+glm_strk_valid <- predict(glm_strk, strk$Valid_set, type = 'prob')$X1
+confusionMatrix(glm_strk_valid, dep$Valid_set$CVDSTRK3)
 
 system.time(
 glm_dep <- train(make.names(ADDEPEV2) ~ .,
@@ -167,6 +170,8 @@ glm_dep <- train(make.names(ADDEPEV2) ~ .,
                  trControl = ctrl)
 )
 glm_dep$results
+glm_dep_valid <- predict(glm_dep, dep$Valid_set, type = 'prob')$X1
+confusionMatrix(glm_dep_valid, dep$Valid_set$ADDEPEV2)
 
 save(glm_db, glm_strk, glm_dep, file = 'intermediate_saves/glm_models.RData')
 
@@ -176,21 +181,20 @@ glm_dep_p <- predict(glm_dep, dep$Test_set, type = 'prob')$X1
 
 save(glm_db_p, glm_strk_p, glm_dep_p, file = 'intermediate_saves/glm_p.RData')
 
-rm(glm_db, glm_db_p, 
-   glm_strk, glm_strk_p, 
-   glm_dep, glm_dep_p, 
+rm(glm_db, glm_db_valid, glm_db_p, 
+   glm_strk, glm_strk_valid, glm_strk_p, 
+   glm_dep, glm_dep_valid, glm_dep_p, 
    glm_tune, ctrl)
 
 #=========================== Naive Bayes Models: ===========================#
 
-# RUNS MUCH FASTER OUTSIDE OF train()
 nb_db <- NaiveBayes(x = dplyr::select(db$Train_set, -DIABETE3),
                     grouping = db$Train_set$DIABETE3,
                     fL = 0.5,
                     useKernel = TRUE,
                     adjust = 0.5)
 nb_db_valid <- predict(nb_db, db$Valid_set, type = 'prob')$posterior[,1]
-confusionMatrix(ifelse(nb_db_valid > 0.5, '1', '2'), db$Valid_set$DIABETE3)
+confusionMatrix(nb_db_valid, db$Valid_set$DIABETE3)
 
 system.time(
 nb_strk <- NaiveBayes(x = dplyr::select(strk$Train_set, -CVDSTRK3),
@@ -198,14 +202,14 @@ nb_strk <- NaiveBayes(x = dplyr::select(strk$Train_set, -CVDSTRK3),
                       fL = 1)
 )
 nb_strk_valid <- predict(nb_strk, strk$Valid_set, type = 'prob')$posterior[,1]
-confusionMatrix(ifelse(nb_strk_valid > 0.5, '1', '2'), strk$Valid_set$CVDSTRK3)
+confusionMatrix(nb_strk_valid, strk$Valid_set$CVDSTRK3)
 
 nb_dep <- NaiveBayes(x = dplyr::select(dep$Train_set, -ADDEPEV2),
                      grouping = dep$Train_set$ADDEPEV2,
                      fL = 1,
                      useKernel = TRUE)
 nb_dep_valid <- predict(nb_dep, dep$Valid_set, type = 'prob')$posterior[,1]
-confusionMatrix(ifelse(nb_dep_valid > 0.5, '1', '2'), dep$Valid_set$ADDEPEV2)
+confusionMatrix(nb_dep_valid, dep$Valid_set$ADDEPEV2)
 
 save(nb_db, nb_strk, nb_dep, file = 'intermediate_saves/nb_models.RData')
 
@@ -232,7 +236,7 @@ library(ROCR)
 library(caret)
 
 # Load in predictions
-load('intermediate_saves/targets.RData')
+load('intermediate_saves/modeling_data.RData')
 load('intermediate_saves/rf_p.RData')
 load('intermediate_saves/glm_p.RData')
 load('intermediate_saves/nb_p.RData')
@@ -280,34 +284,3 @@ confusionMatrix(ifelse(diabetes$RF > 0.6, 1, 2), db$Test_set$DIABETE3)
 confusionMatrix(ifelse(stroke$RF > 0.6, 1, 2), strk$Test_set$DIABETE3)
 confusionMatrix(ifelse(depression$RF > 0.6, 1, 2), dep$Test_set$ADDEPEV2)
 
-
-#========================== USE THE MODELS ==================================#
-
-# For possible responses check out lists below:
-load('intermediate_saves/targets.RData')
-
-# Diabetes Model Inputs
-sapply(db$Test_set, levels)
-# Stroke Model Inputs
-sapply(strk$Test_set, levels)
-# Depression Model Inputs
-sapply(dep$Test_set, levels)
-
-# The RF models take up 6GB of memory so be aware of your capacity
-load('intermediate_saves/rf_models.RData')
-
-# Enter your results. Questions (and possible responses) can be found in the 'app' folder in the file 'Q_cat.csv'
-# App version will be much more user friendly when completed
-predict(rf_db_3, data.frame(GENHLTH = '', X_RFHYPE5 = '', X_BMI5CAT = '', X_RFCHOL = '', EMPLOYMENT = '', 
-                            CHECKUP1 = '', USEEQUIP = '', CVDINFR4 = '', RACE = '', PHYSHLTH = '', 
-                            CVDCRHD4 = '', SEX = '', EDUCA = '', PERSDOC2 = '', HAVARTH3 = '',
-                            INCOME2 = '', X_RFBING5 = '', PA_BENCHMARK = '', LIMITED = '', STRFREQ_ = ''), type = "prob")
-predict(rf_strk_3, data.frame(EMPLOYMENT = '', CVDINFR4 = '', X_AGE_G = '', GENHLTH = '', CVDCRHD4 = '', 
-                              X_RFHYPE5 = '' = '', USEEQUIP = '', LIMITED = '', PHYSHLTH = '' = '', HAVARTH3 = '',
-                              DIABETE3 = '', INCOME2 = '', MARITAL = '', X_RFCHOL = '', CHCCOPD = '',
-                              EDUCA = '', PA_BENCHMARK = '', X_SMOKER3 = '', RENTHOM1 = '', ADDEPEV2 = ''), type = "prob")
-predict(rf_dep_3, data.frame(MENTHLTH = '', LIMITED = '', EMPLOYMENT = '', X_AGE_G = '', SEX = '',
-                             GENHLTH = '', HAVARTH3 = '', X_SMOKER3 = '', MEDCOST = '', MARITAL = '',
-                             PHYSHLTH = '', RACE = '', X_RFCHOL = '', USEEQUIP = '', ASTHMA3 = '',
-                             RENTHOM1 = '', CHCCOPD = '', INCOME2 = '', X_BMI5CAT = '', X_RFHYPE5,
-                             PA_BENCHMARK = '', PERSDOC2 = ''), type = "prob")
