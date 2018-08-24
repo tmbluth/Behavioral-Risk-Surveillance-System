@@ -1,5 +1,7 @@
 library(tidyverse)
+library(caret)
 source('analysis/funcs.r')
+
 all_years <- read_rds('intermediate_saves/all_years.rds')
 
 # View all unique responses:
@@ -33,9 +35,9 @@ factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'CVDINFR4',  'CVDCRHD4',
              'HAVARTH3', 'ADDEPEV2', 'CHCKIDNY', 'DIABETE3',   'SEX',
              'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 'LIMITED',
              'USEEQUIP', 'RACE',     '_RFHYPE5', '_RFCHOL',    '_RFBING5', 
-             '_SMOKER3', 'PREGNANT', 'PA_BENCHMARK', 'year')
+             '_SMOKER3', 'PREGNANT', 'PA_BENCHMARK', 'CHECKUP1', 'year')
 
-factors.ordered <- c('GENHLTH', 'CHECKUP1', '_AGE_G', 'EDUCA', 'INCOME2', '_BMI5CAT')
+factors.ordered <- c('GENHLTH', '_AGE_G', 'EDUCA', 'INCOME2', '_BMI5CAT')
 
 # Check to see if variable groupings are equal to number of columns
 setdiff(c(numerics, factors, factors.ordered), names(clean_years)); setdiff(names(clean_years), c(numerics, factors, factors.ordered))
@@ -48,23 +50,115 @@ clean_years2 <- clean_years %>%
   # Change questions with ordered classes into ordered factors
   mutate_if(names(.) %in% factors.ordered, as.ordered); rm(clean_years)
 
+NA_prop(clean_years2)
+
 # Take out the outcome variable missing values
-clean_years3 <- clean_years2[!is.na(clean_years2$DIABETE3),] %>% 
-                .[!is.na(.$CVDSTRK3),] %>%
-                .[!is.na(.$ADDEPEV2),]; rm(clean_years2)
-
-# Make NA's into a factor level. This can be used in exploration
+clean_years3 <- clean_years2 %>% 
+  filter(!is.na(DIABETE3),
+         !is.na(CVDSTRK3),
+         !is.na(ADDEPEV2)
+         ); rm(clean_years2)
+          
+# Remove high NA variables (above 10% missing), make remaining NA's into a factor level, remove remaining NA's
 clean_years_NA <- clean_years3 %>% 
+  dplyr::select(-INCOME2, -PA_BENCHMARK, -`_RFCHOL`) %>% 
   map_if(.p = function(x) is.factor(x) & !is.ordered(x), .f = function(x) ifelse(is.na(x), 'Missing', x)) %>% 
-  as.data.frame()
-  
-NA_prop(clean_years_final)
-
-clean_years_final <- clean_years_NA %>% 
-  select(-INCOME2) %>% 
-  map_if(is.numeric, function(x) ifelse(is.na(x), median(x, na.rm = TRUE), x)) %>% 
   as.data.frame() %>% 
   na.omit()
+  
+NA_prop(clean_years_NA)
+
+# Feature/variable Importance must be found to see if any variables can be excluded for a shorter survey in the end
+# Models with mtry that is the rounded square root of the number of columns will be assessed with this measure
+
+vi_db  <- ranger(as.factor(DIABETE3) ~ .,
+                 data = clean_years_NA,
+                 mtry = round(sqrt(ncol(clean_years_NA)),0),
+                 splitrule = 'gini',
+                 importance = 'permutation')$variable.importance
+
+vi_strk <- ranger(as.factor(CVDSTRK3) ~ .,
+                  data = clean_years_NA,
+                  mtry = round(sqrt(ncol(clean_years_NA)),0),
+                  splitrule = 'gini',
+                  importance = 'permutation')$variable.importance
+
+vi_dep <- ranger(as.factor(ADDEPEV2) ~ .,
+                 data = clean_years_NA,
+                 mtry = round(sqrt(ncol(clean_years_NA)),0),
+                 splitrule = 'gini',
+                 importance = 'permutation')$variable.importance
+
+save(vi_db, vi_strk, vi_dep, file = 'intermediate_saves/vi.RData')
+
+par(mar = c(10,5,5,1))
+barplot(sort(vi_db,  decreasing = T), las = 2, main = 'Diabetes Variables of Importance')
+barplot(sort(vi_strk,decreasing = T), las = 2, main = 'Stroke Variables of Importance')
+barplot(sort(vi_dep, decreasing = T), las = 2, main = 'Depression Variables of Importance')
+
+clean_years_final <- transmute(clean_years_NA,
+                            Diabetes = ifelse(DIABETE3 == '1', 'Diagnosed', 'Undiagnosed'),
+                            Stroke = ifelse(CVDSTRK3 == '1', 'Diagnosed', 'Undiagnosed'),
+                            Depression = ifelse(ADDEPEV2 == '1', 'Diagnosed', 'Undiagnosed'),
+                            Recent_Checkup = factor(CHECKUP1,
+                                              labels = c('Never', 'Within the last 12 months', 'Within the past 2 years', 'Within the past 5 years', '5 or more years ago', 'Missing'), 
+                                              levels = c('1', '2', '3', '4', '5', 'Missing')),
+                            Medical_Cost = factor(MEDCOST,
+                                             labels = c('Yes', 'No', 'Missing'), 
+                                             levels = c('1', '2', 'Missing')),
+                            Heart_Attack = factor(CVDINFR4, 
+                                              labels = c('Yes', 'No', 'Missing'), 
+                                              levels = c('1', '2', 'Missing')),
+                            Heart_Disease = factor(CVDCRHD4,
+                                              labels = c('Yes', 'No', 'Missing'), 
+                                              levels = c('1', '2', 'Missing')),
+                            COPD = factor(CHCCOPD,
+                                             labels = c('Yes', 'No', 'Missing'), 
+                                             levels = c('1', '2', 'Missing')),
+                            Arthritis = factor(HAVARTH3,
+                                              labels = c('Yes', 'No', 'Missing'), 
+                                              levels = c('1', '2', 'Missing')),
+                            Hypertension = factor(X_RFHYPE5,
+                                               labels = c('Yes', 'No', 'Missing'), 
+                                               levels = c('2', '1', 'Missing')),
+                            Smoker = factor(X_SMOKER3,
+                                               labels = c('Yes, every day', 'Yes, sometimes', 'Formerly (100+ cigarettes in lifetime)', 'No', 'Missing'), 
+                                               levels = c('1', '2', '3', '4', 'Missing')),
+                            Limited = factor(LIMITED,
+                                             labels = c('Yes', 'No', 'Missing'), 
+                                             levels = c('1' ,'2', 'Missing')),
+                            Need_Equipment = factor(USEEQUIP,
+                                             labels = c('Yes', 'No', 'Missing'), 
+                                             levels = c('1' ,'2', 'Missing')),
+                            Sex = factor(SEX,
+                                         labels = c('Male', 'Female', 'Missing'), 
+                                         levels = c('1' ,'2', 'Missing')),
+                            Race = factor(RACE,
+                                          labels = c('White', 'Black', 'Asian', 'American Indian or Alaskan Native', 'Hispanic', 'Other race/Multiracial', 'Missing'),
+                                          levels = c('1', '2', '3', '4', '5', '6', 'Missing')),
+                            Marital = factor(MARITAL,
+                                             labels = c('Married', 'Divorced', 'Widowed', 'Separated', 'Never married', 'A member of an unmarried couple', 'Missing'), 
+                                             levels = c('1', '2', '3', '4', '5', '6', 'Missing')),
+                            Age_Group = factor(X_AGE_G,
+                                               labels = c('18 to 24', '25 to 34', '35 to 44', '45 to 54', '55 to 64', '65 or older'), 
+                                               levels = c('1', '2', '3', '4', '5', '6')),
+                            Education = factor(EDUCA,
+                                               labels = c('Never attended school or only kindergarten',	'Grades 1 through 8',	'Grades 9 through 11',	'Grade 12 or GED',	'College/technical school 1 year to 3 years',	'College 4 years or more'), 
+                                               levels = c('1', '2', '3', '4', '5', '6')),
+                            Employment = factor(EMPLOYMENT,
+                                                labels = c('Employed for wages',	'Self-employed',	'Out of work for 1 year or more',	'Out of work for less than 1 year',	'A homemaker', 'A student',	'Retired',	'Unable to work', 'Missing'), 
+                                                levels = c('1', '2', '3', '4', '5', '6', '7', '8', 'Missing')),
+                            BMI = factor(X_BMI5CAT,
+                                         labels = c('Less than 18.5', '18.5 to 24.9', '25 to 29.9', '30+'), 
+                                         levels = c('1', '2', '3', '4')),
+                            General_Health = factor(GENHLTH,
+                                                    labels = c('Excellent',	'Very Good',	'Good',	'Fair',	'Poor'), 
+                                                    levels = c('1', '2', '3', '4', '5')),
+                            Physical_Health = PHYSHLTH,
+                            Mental_Health = MENTHLTH,
+                            Fruit_Juice = FTJUDA1_,
+                            Greens = GRENDAY_
+                            )
 
 write_rds(clean_years_final, 'intermediate_saves/clean_years_final.rds')
 
