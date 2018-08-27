@@ -29,53 +29,69 @@ NA_prop <- function(df) {
   return(NA_df)
 }
 
-#=====================================================================================================#
-
-# WORKS WELL BUT CANNOT COMPUTE PROBABILITY IN FUNCTION FORM
-rf_tune <- function(.target, .data, .mtry, .num.trees, .importance = 'none'){
-  train_downsample <- downSample(x = .data[, names(.data) != .target], 
-                                 y = .data[, .target],
-                                 yname = .target)
-  
-  model <- ranger(as.formula(paste(.target, '~ .')),
-                  data = droplevels(train_downsample),                     
-                  mtry = .mtry,
-                  num.trees = .num.trees,
-                  importance = .importance,
-                  min.node.size = 100,
-                  splitrule = 'gini', 
-                  probability = TRUE)
-  return(model)
-}
 
 #=====================================================================================================#
 
-downsample_part <- function(df, target, train.pct, val.pct) {
-require(caret)
-  down_data <- downSample(x = df[, names(df) != target], 
-                          y = df[, target],
-                          yname = target)
-  train_part <- createDataPartition(down_data[, target], p = train.pct, list = FALSE)
-  train_val <- down_data[train_part, ]
-  val_part <- createDataPartition(train_val[, target], p = val.pct, list = FALSE)
-  Train <- train_val[-val_part, ]
-  Validate <- train_val[val_part, ]
-  Test <- down_data[-train_part, ]
-
-  return(list(Train_set = Train, Valid_set = Validate, Test_set = Test))
-}
-
-upsample_part <- function(df, target, train.pct, val.pct) {
+downsample_part <- function(df, target, p) {
   require(caret)
-  up_data <- upSample(x = df[, names(df) != target], 
-                      y = df[, target],
-                      yname = target)
-  train_part <- createDataPartition(up_data[, target], p = train.pct, list = FALSE)
-  train_val <- up_data[train_part, ]
-  val_part <- createDataPartition(train_val[, target], p = val.pct, list = FALSE)
-  Train <- train_val[-val_part, ]
-  Validate <- train_val[val_part, ]
-  Test <- up_data[-train_part, ]
+  down_data <- downSample(x = df[, names(df) != target], 
+                          y = as.factor(df[, target]),
+                          yname = target)
+  train_part <- createDataPartition(down_data[, target], p = p, list = FALSE)
+  Train <- down_data[train_part, ]
+  Test <- down_data[-train_part, ]
   
-  return(list(Train_set = Train, Valid_set = Validate, Test_set = Test))
+  return(list(Train = Train, Test = Test))
 }
+
+#=====================================================================================================#
+
+plot_lime <- function(Model, Train_set, Sample, title) {
+  
+  require(ggplot2)
+  require(dplyr)
+  #require(billboarder)
+  
+  explainer <- lime::lime(
+    x = Train_set,
+    model = Model,
+    bin_continuous = FALSE
+  )
+  
+  # Run explain() on explainer
+  explanation <- lime::explain(
+    Sample[1, , drop = FALSE], 
+    explainer = explainer, 
+    n_labels = 1, 
+    n_features = ncol(Sample),
+    kernel_width = 0.5
+  )
+  
+  type_pal <- c('Contradicts', 'Supports') 
+  explanation$type <- factor(ifelse(sign(explanation$feature_weight) == 
+                                      -1, type_pal[1], type_pal[2]), levels = type_pal) 
+  explanation_plot_df <- explanation %>%
+    mutate(Churn_Predictor = case_when(
+      (label == 'Diagnosed' & type == 'Supports') | (label == 'Undiagnosed' & type == 'Contradicts') ~ 'More likely',
+      (label == 'Diagnosed' & type == 'Contradicts') | (label == 'Undiagnosed' & type == 'Supports') ~ 'Less likely')
+    )  
+  
+  p1 <- ggplot(explanation_plot_df, aes(x = reorder(feature_desc, abs(feature_weight)), y = feature_weight)) +
+    geom_bar(stat = "identity", aes(fill = Churn_Predictor)) + 
+    scale_y_continuous('Feature Weight') +
+    scale_x_discrete('') +
+    ggtitle(title) +
+    coord_flip()
+  
+  p1
+  
+  # p2 <- billboarder() %>%
+  #   bb_barchart(
+  #     data = explanation_plot_df,
+  #     mapping = bbaes(x = feature_desc, y = feature_weight, group = churn_predictor),
+  #     rotated = TRUE,
+  #     stacked = TRUE
+  #   ) 
+  # 
+  # p2
+} 

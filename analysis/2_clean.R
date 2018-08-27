@@ -30,25 +30,22 @@ numerics <- c('PHYSHLTH', 'MENTHLTH', 'CHILDREN', 'STRFREQ_', 'FTJUDA1_',
               'FRUTDA1_', 'BEANDAY_', 'GRENDAY_', 'ORNGDAY_', 'VEGEDA1_')
 
 # List of factor vars:
-factors <- c('HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'CVDINFR4',  'CVDCRHD4',   
+factors <- c('GENHLTH', 'HLTHPLN1', 'PERSDOC2', 'MEDCOST',  'CVDINFR4',  'CVDCRHD4',   
              'CVDSTRK3', 'ASTHMA3',  'CHCSCNCR', 'CHCOCNCR',   'CHCCOPD',
              'HAVARTH3', 'ADDEPEV2', 'CHCKIDNY', 'DIABETE3',   'SEX',
              'MARITAL',  'RENTHOM1', 'VETERAN3', 'EMPLOYMENT', 'LIMITED',
              'USEEQUIP', 'RACE',     '_RFHYPE5', '_RFCHOL',    '_RFBING5', 
-             '_SMOKER3', 'PREGNANT', 'PA_BENCHMARK', 'CHECKUP1', 'year')
-
-factors.ordered <- c('GENHLTH', '_AGE_G', 'EDUCA', 'INCOME2', '_BMI5CAT')
+             '_SMOKER3', 'PREGNANT', 'PA_BENCHMARK', 'CHECKUP1', 'year',
+             '_AGE_G', 'EDUCA', 'INCOME2', '_BMI5CAT')
 
 # Check to see if variable groupings are equal to number of columns
-setdiff(c(numerics, factors, factors.ordered), names(clean_years)); setdiff(names(clean_years), c(numerics, factors, factors.ordered))
+setdiff(c(numerics, factors), names(clean_years)); setdiff(names(clean_years), c(numerics, factors))
 
 clean_years2 <- clean_years %>% 
   # Keep continuous variables as numeric
   mutate_if(names(.) %in% numerics, as.numeric) %>% 
   # Change questions with classes into factors
-  mutate_if(names(.) %in% factors, as.factor) %>% 
-  # Change questions with ordered classes into ordered factors
-  mutate_if(names(.) %in% factors.ordered, as.ordered); rm(clean_years)
+  mutate_if(names(.) %in% factors, as.factor)
 
 NA_prop(clean_years2)
 
@@ -57,52 +54,63 @@ clean_years3 <- clean_years2 %>%
   filter(!is.na(DIABETE3),
          !is.na(CVDSTRK3),
          !is.na(ADDEPEV2)
-         ); rm(clean_years2)
-          
+         )
+
 # Remove high NA variables (above 10% missing), make remaining NA's into a factor level, remove remaining NA's
 clean_years_NA <- clean_years3 %>% 
-  dplyr::select(-INCOME2, -PA_BENCHMARK, -`_RFCHOL`) %>% 
-  map_if(.p = function(x) is.factor(x) & !is.ordered(x), .f = function(x) ifelse(is.na(x), 'Missing', x)) %>% 
+  dplyr::select(-INCOME2, -PA_BENCHMARK, -`_RFCHOL`, -CHECKUP1) %>% 
+  map_if(.p = is.factor, .f = function(x) ifelse(is.na(x), 'Missing', x)) %>% 
   as.data.frame() %>% 
   na.omit()
-  
+
+rm(clean_years, clean_years2, clean_years3)
+
 NA_prop(clean_years_NA)
+write_rds(clean_years_NA, 'intermediate_saves/clean_years_NA.rds')
 
 # Feature/variable Importance must be found to see if any variables can be excluded for a shorter survey in the end
 # Models with mtry that is the rounded square root of the number of columns will be assessed with this measure
+mtry <- round(sqrt(ncol(clean_years_NA)),0)
+survey_sample <- sample_frac(clean_years_NA, 0.25)
 
-vi_db  <- ranger(as.factor(DIABETE3) ~ .,
-                 data = clean_years_NA,
-                 mtry = round(sqrt(ncol(clean_years_NA)),0),
+vi_db  <- ranger(as.factor(DIABETE3) ~ ., 
+                 data = survey_sample,
+                 mtry = mtry,
+                 num.trees = 200,
                  splitrule = 'gini',
-                 importance = 'permutation')$variable.importance
+                 importance = 'permutation')
 
 vi_strk <- ranger(as.factor(CVDSTRK3) ~ .,
-                  data = clean_years_NA,
-                  mtry = round(sqrt(ncol(clean_years_NA)),0),
+                  data = survey_sample,
+                  mtry = mtry,
+                  num.trees = 200,
                   splitrule = 'gini',
-                  importance = 'permutation')$variable.importance
+                  importance = 'permutation')
 
 vi_dep <- ranger(as.factor(ADDEPEV2) ~ .,
-                 data = clean_years_NA,
-                 mtry = round(sqrt(ncol(clean_years_NA)),0),
+                 data = survey_sample,
+                 mtry = mtry,
+                 num.trees = 200,
                  splitrule = 'gini',
-                 importance = 'permutation')$variable.importance
+                 importance = 'permutation')
 
-save(vi_db, vi_strk, vi_dep, file = 'intermediate_saves/vi.RData')
+save(vi_db, vi_strk, vi_dep, file = 'intermediate_saves/vi_permutation.RData')
 
 par(mar = c(10,5,5,1))
-barplot(sort(vi_db,  decreasing = T), las = 2, main = 'Diabetes Variables of Importance')
-barplot(sort(vi_strk,decreasing = T), las = 2, main = 'Stroke Variables of Importance')
-barplot(sort(vi_dep, decreasing = T), las = 2, main = 'Depression Variables of Importance')
+barplot(sort(vi_db$variable.importance ,  decreasing = T), las = 2, main = 'Diabetes Variables of Importance')
+barplot(sort(vi_strk$variable.importance, decreasing = T), las = 2, main = 'Stroke Variables of Importance')
+barplot(sort(vi_dep$variable.importance, decreasing = T), las = 2, main = 'Depression Variables of Importance')
 
 clean_years_final <- transmute(clean_years_NA,
-                            Diabetes = ifelse(DIABETE3 == '1', 'Diagnosed', 'Undiagnosed'),
-                            Stroke = ifelse(CVDSTRK3 == '1', 'Diagnosed', 'Undiagnosed'),
-                            Depression = ifelse(ADDEPEV2 == '1', 'Diagnosed', 'Undiagnosed'),
-                            Recent_Checkup = factor(CHECKUP1,
-                                              labels = c('Never', 'Within the last 12 months', 'Within the past 2 years', 'Within the past 5 years', '5 or more years ago', 'Missing'), 
-                                              levels = c('1', '2', '3', '4', '5', 'Missing')),
+                            Diabetes = factor(DIABETE3,
+                                              labels = c('Diagnosed', 'Undiagnosed'),
+                                              levels = c('1', '2')),
+                            Stroke = factor(CVDSTRK3,
+                                            labels = c('Diagnosed', 'Undiagnosed'),
+                                            levels = c('1', '2')),
+                            Depression = factor(ADDEPEV2,
+                                                labels = c('Diagnosed', 'Undiagnosed'),
+                                                levels = c('1', '2')),
                             Medical_Cost = factor(MEDCOST,
                                              labels = c('Yes', 'No', 'Missing'), 
                                              levels = c('1', '2', 'Missing')),
@@ -143,19 +151,20 @@ clean_years_final <- transmute(clean_years_NA,
                                                labels = c('18 to 24', '25 to 34', '35 to 44', '45 to 54', '55 to 64', '65 or older'), 
                                                levels = c('1', '2', '3', '4', '5', '6')),
                             Education = factor(EDUCA,
-                                               labels = c('Never attended school or only kindergarten',	'Grades 1 through 8',	'Grades 9 through 11',	'Grade 12 or GED',	'College/technical school 1 year to 3 years',	'College 4 years or more'), 
-                                               levels = c('1', '2', '3', '4', '5', '6')),
+                                               labels = c('Never attended school or only kindergarten',	'Grades 1 through 8',	'Grades 9 through 11',	'Grade 12 or GED',	'College/technical school 1 year to 3 years',	'College 4 years or more', 'Missing'), 
+                                               levels = c('1', '2', '3', '4', '5', '6', 'Missing')),
                             Employment = factor(EMPLOYMENT,
                                                 labels = c('Employed for wages',	'Self-employed',	'Out of work for 1 year or more',	'Out of work for less than 1 year',	'A homemaker', 'A student',	'Retired',	'Unable to work', 'Missing'), 
                                                 levels = c('1', '2', '3', '4', '5', '6', '7', '8', 'Missing')),
                             BMI = factor(X_BMI5CAT,
-                                         labels = c('Less than 18.5', '18.5 to 24.9', '25 to 29.9', '30+'), 
-                                         levels = c('1', '2', '3', '4')),
+                                         labels = c('Less than 18.5', '18.5 to 24.9', '25 to 29.9', '30+', 'Missing'), 
+                                         levels = c('1', '2', '3', '4', 'Missing')),
                             General_Health = factor(GENHLTH,
-                                                    labels = c('Excellent',	'Very Good',	'Good',	'Fair',	'Poor'), 
-                                                    levels = c('1', '2', '3', '4', '5')),
+                                                    labels = c('Excellent',	'Very Good',	'Good',	'Fair',	'Poor', 'Missing'), 
+                                                    levels = c('1', '2', '3', '4', '5', 'Missing')),
                             Physical_Health = PHYSHLTH,
                             Mental_Health = MENTHLTH,
+                            Fruits = FRUTDA1_,
                             Fruit_Juice = FTJUDA1_,
                             Greens = GRENDAY_
                             )

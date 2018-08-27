@@ -1,6 +1,5 @@
 library(data.table)
-library(dplyr)
-library(forcats)
+library(tidyverse)
 
 source('analysis/funcs.r')
 
@@ -75,4 +74,4 @@ all_years <- bind_rows(y11, y13, y15) %>%
 
 NA_prop(all_years)
 
-save(all_years, file = 'intermediate_saves/all_years.RData')
+write_rds(all_years, 'intermediate_saves/all_years.rds')
